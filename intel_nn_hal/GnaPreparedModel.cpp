@@ -180,7 +180,7 @@ bool GnaPreparedModel::initialize() {
     runtimeMetrics.irBuild_time = (double(millisecondsDuration(irbuild_end, irbuild_start)));
     gnaPluginPtr = new GnaNetwork(network, "GNA");
     InferenceEngine::CNNNetwork passed_network({network});
-    gnaPluginPtr->loadNetwork(passed_network);
+    gnaPluginPtr->loadNetwork(passed_network, isDecoderNw);
     time_point gnabuild_end = now();
     runtimeMetrics.nw_load_time = (double(millisecondsDuration(gnabuild_end, irbuild_end)));
     gnaPluginPtr->queryState();
