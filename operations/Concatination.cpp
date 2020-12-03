@@ -14,11 +14,7 @@
  * limitations under the License.
  */
 
-#include <android-base/logging.h>
-#include <android/log.h>
-#include <log/log.h>
-
-#include "Driver.h"
+#include "common.h"
 
 namespace android {
 namespace hardware {
@@ -32,11 +28,6 @@ namespace concat{
     bool initialize(const std::string& device){
         if (device.compare("CPU")){
             VLOG(L1, "OperationType::CONCATENATION");
-            /*
-            * Inputs:
-            * 0 ~ n-1: The list on n input tensors, of shape [D0, D1, ..., Daxis(i), ..., Dm]
-            * n: An INT32 value, specifying the concatenation axis.
-            */
             uint32_t axis;
             auto n = operation.inputs.size() - 1;
             std::vector<OutputPort> inputs;
@@ -63,14 +54,32 @@ namespace concat{
 
             return true;
         } else if (device.compare("GNA")){
-
+            return false;
         } else {
             return false;
         }
     }
 
-    bool createGraph(){
-        return true;
+    inline OutputPort createGraph(const std::vector<OutputPort> inputs, int axis = 1){
+        std::string name = "Concat-";  // todo: make it unique
+        name = name << layer_name_count++;
+        InferenceEngine::LayerParams prm;
+        prm.precision = g_layer_precision;
+        prm.name = name;
+        auto ret = std::make_shared<InferenceEngine::ConcatLayer>(prm);
+        ret->type = "Concat";
+        addAttr(ret, "axis", axis);
+        inputs[0] >> ret;
+        auto outDim = inputs[0]->getTensorDesc().getDims();
+        // it was fixed, should be backward compatiobale though...
+        // axis = static_cast<int>(outDim.size()) - axis - 1; // todo: we are all in reverse here :-(
+        auto axisSize = outDim[axis];
+        for (int i = 1; i < inputs.size(); ++i) {
+            inputs[i] >> ret;
+            axisSize += inputs[i]->getTensorDesc().getDims()[axis];
+        }
+        outDim[axis] = axisSize;
+        return addOutput(ret, outDim);
     }
 }
 }  // namespace nnhal

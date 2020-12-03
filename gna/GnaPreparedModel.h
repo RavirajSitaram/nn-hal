@@ -42,17 +42,10 @@ public:
     ~GnaPreparedModel() override {  deinitialize(); }
 
     bool initialize();
-    Return<ErrorStatus> execute(const Request& request,
-                                const sp<V1_0::IExecutionCallback>& callback) override;
-    Return<ErrorStatus> execute_1_2(const Request& request, MeasureTiming measure,
-                                    const sp<V1_2::IExecutionCallback>& callback) override;
-    Return<void> executeSynchronously(const Request& request, MeasureTiming measure,
-                                      executeSynchronously_cb cb) override;
-    Return<void> configureExecutionBurst(
-        const sp<V1_2::IBurstCallback>& callback,
-        const MQDescriptorSync<V1_2::FmqRequestDatum>& requestChannel,
-        const MQDescriptorSync<V1_2::FmqResultDatum>& resultChannel,
-        configureExecutionBurst_cb cb) override;
+    virtual Blob::Ptr GetConstWeightsOperandAsTensor(uint32_t index) override;
+    virtual Blob::Ptr GetConstOperandAsTensor(int operand_index, int operation_idx) override;
+    virtual Blob::Ptr GetInOutOperandAsBlob(RunTimeOperandInfo& op, const uint8_t* buf,
+                                            uint32_t& len) override;
 };
 
 }  // namespace nnhal

@@ -27,6 +27,7 @@
 #include <string>
 
 #include "Driver.h"
+#include "utils.h"
 
 using ::android::hardware::MQDescriptorSync;
 using ::android::hidl::memory::V1_0::IMemory;
@@ -38,6 +39,43 @@ namespace neuralnetworks {
 namespace nnhal {
 namespace {
 
+// Information we maintain about each operand during execution that
+// may change during execution.
+struct RunTimeOperandInfo {
+    OperandType type;
+    std::vector<uint32_t> dimensions;
+    float scale;
+    int32_t zeroPoint;
+    uint8_t* buffer;
+    uint32_t length;
+    OperandLifeTime lifetime;
+    uint32_t numberOfUsesLeft;
+    Operand::ExtraParams extraParams;
+    Shape shape() const {
+        return {
+                .type = type,
+                .dimensions = dimensions,
+                .scale = scale,
+                .offset = zeroPoint,
+                .extraParams = extraParams,
+        };
+    }
+};
+
+// Used to keep a pointer to each of the memory pools.
+struct RunTimePoolInfo {
+    sp<IMemory> memory;
+    hidl_memory hidlMemory;
+    uint8_t* buffer;
+
+    bool set(const hidl_memory& hidlMemory);
+    bool update();
+};
+
+bool setRunTimePoolInfosFromHidlMemories(std::vector<RunTimePoolInfo>* poolInfos,
+                                         const hidl_vec<hidl_memory>& pools);
+
+template <typename T_IExecutionCallback>;
 class BasePreparedModel : public V1_2::IPreparedModel{
     public:
         BasePreparedModel(const Model& model)
@@ -68,10 +106,30 @@ class BasePreparedModel : public V1_2::IPreparedModel{
         }
         ~BasePreparedModel() override { deinitialize(); }
         static bool isOperationSupported(const Operation& operation, const Model& model);
+        Return<ErrorStatus> execute(const Request& request,
+                                const sp<V1_0::IExecutionCallback>& callback) override;
+        Return<ErrorStatus> execute_1_2(const Request& request, MeasureTiming measure,
+                                        const sp<V1_2::IExecutionCallback>& callback) override;
+        Return<void> executeSynchronously(const Request& request, MeasureTiming measure,
+                                        executeSynchronously_cb cb) override;
+        Return<void> configureExecutionBurst(
+            const sp<V1_2::IBurstCallback>& callback,
+            const MQDescriptorSync<V1_2::FmqRequestDatum>& requestChannel,
+            const MQDescriptorSync<V1_2::FmqResultDatum>& resultChannel,
+            configureExecutionBurst_cb cb) override;
     protected:
+        void deinitialize();
+        bool initializeRunTimeOperandInfo();
         void initializeInput();
         bool finalizeOutput();
-        
+        template <typename T>
+        T ParseOperationInput(const Model& model, const Operation& operation, uint32_t index);
+        virtual Blob::Ptr GetConstWeightsOperandAsTensor(uint32_t index);
+        virtual Blob::Ptr GetConstOperandAsTensor(int operand_index, int operation_idx);
+        virtual Blob::Ptr GetInOutOperandAsBlob(RunTimeOperandInfo& op, const uint8_t* buf,
+                                            uint32_t& len);
+        OutputPort getPort(int index);
+
         std::string mTargetDevice;
         Model mModel;
         std::vector<RunTimeOperandInfo> mOperands;

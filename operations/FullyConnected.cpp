@@ -14,11 +14,7 @@
  * limitations under the License.
  */
 
-#include <android-base/logging.h>
-#include <android/log.h>
-#include <log/log.h>
-
-#include "Driver.h"
+#include "common.h"
 
 namespace android {
 namespace hardware {
@@ -69,9 +65,8 @@ namespace fullyconnected{
             if (output.type != OperandType::TENSOR_FLOAT32) {
                 VLOG(L1, "NNERR:invalid output operand types for FC ,aborting!!");
                 return false;
-            } else{
-                return true;
-            }
+            } 
+        return true;
     }
 
     bool initialize(const std::string& device){
@@ -219,7 +214,7 @@ namespace fullyconnected{
             return false;
         }
     }
-    
+
     bool createGraph(){
         return true;
     }
