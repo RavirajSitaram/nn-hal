@@ -15,29 +15,36 @@
  */
 
 #include "common.h"
+#include "Convolution.h"
 
 namespace android {
 namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
-namespace add{
+namespace convolution{
 
 bool validate(const Operation& operation, const Model& model){
-    VLOG(L1, "Validating DEPTHWISE_CONV_2D params");
+    int oper_size = operation.inputs.size();
     const auto& input0 = model.operands[operation.inputs[OP_INPUT_IDX_CONV]];
     const auto& input1 = model.operands[operation.inputs[OP_FILTER_IDX_CONV]];
-    // depth_out = depth_in * depth_multiplier,input1 is depth_out and input0 is
-    // depth_in
-
     const auto& input2 = model.operands[operation.inputs[OP_BIAS_IDX_CONV]];
 
-    int oper_size = operation.inputs.size();
-
+    VLOG(L1, "Validating CONV2D params");
+    // filter in == channel
     // Check Input/Filter  Operand type
+
     if (input0.type != OperandType::TENSOR_FLOAT32 ||
         input1.type != OperandType::TENSOR_FLOAT32 ||
         input2.type != OperandType::TENSOR_FLOAT32) {
-        VLOG(L1, "NNERR: input 0-2 invalid operand types");
+        VLOG(L1, "NNERR: input0/input1/input2 invalid operand types");
+        return false;
+    }
+
+    if (input0.lifetime == input1.lifetime) {
+        VLOG(L1,
+                "NNERR: Filter (index %d) as model_input (index %d) not "
+                "supported,aborting!!",
+                operation.inputs[OP_FILTER_IDX_CONV], operation.inputs[OP_INPUT_IDX_CONV]);
         return false;
     }
 
@@ -51,53 +58,48 @@ bool validate(const Operation& operation, const Model& model){
         return false;
     }
 
-    if (input0.lifetime == input1.lifetime) {
+    // Check Channel parameter for Input and filter/kernel
+    if (input0.dimensions[NHWC_CH_IDX] != input1.dimensions[NHWC_CH_IDX]) {
         VLOG(L1,
-                "NNERR: Filter (index %d) as model_input (index %d) not "
-                "supported,aborting!!",
-                operation.inputs[OP_FILTER_IDX_CONV], operation.inputs[OP_INPUT_IDX_CONV]);
+                "NNERR: input-0 ch-size %d  and input-1 ch-size %d not "
+                "equal,aborting!!",
+                input0.dimensions.size(), input1.dimensions.size());
         return false;
     }
 
-    if ((input1.dimensions[NHWC_CH_IDX] % input0.dimensions[NHWC_CH_IDX]) != 0) {
-        VLOG_CHECKFAIL(
-            "NNERR:input/filter invalid depth leads to non-integer "
-            "Depth Multiper");
+    if (input1.dimensions[NHWC_HT_IDX] != input1.dimensions[NHWC_WD_IDX]) {
+        VLOG(L1, "NNERR: non-square Filter size(H:%d,W:%d) not supported,warning!!",
+                input1.dimensions[NHWC_HT_IDX], input1.dimensions[NHWC_WD_IDX]);
         return false;
     }
 
     // Check all other Input operand types for implicit/explicit Padding
 
-    if (oper_size == IMPL_PAD_PARAMS_DW_CONV) {
+    if (oper_size == IMPL_PAD_PARAMS_CONV) {
         const auto& input3 = model.operands[operation.inputs[OP_PADSCHEME_IDX_CONV]];
         const auto& input4 = model.operands[operation.inputs[OP_STRD_WD_IDX_IMPL_CONV]];
         const auto& input5 = model.operands[operation.inputs[OP_STRD_HT_IDX_IMPL_CONV]];
-        const auto& input6 = model.operands[operation.inputs[OP_DW_CONV_DPM_IMPL]];
-        const auto& input7 =
-            model.operands[operation.inputs[OP_ACTV_FUNC_IDX_IMPL_DW_CONV]];
+        const auto& input6 = model.operands[operation.inputs[OP_ACTV_FUNC_IDX_IMPL_CONV]];
 
         if (input3.type != OperandType::INT32 || input4.type != OperandType::INT32 ||
-            input5.type != OperandType::INT32 || input6.type != OperandType::INT32 ||
-            input7.type != OperandType::INT32) {
-            VLOG(L1, "NNERR: inputs 3-7 invalid operand types");
+            input5.type != OperandType::INT32 || input6.type != OperandType::INT32) {
+            VLOG(L1, "NNERR: inputs 3-6 invalid operand types");
             return false;
         }
-    } else if (oper_size == EXPL_PAD_PARAMS_DW_CONV) {
+    } else if (oper_size == EXPL_PAD_PARAMS_CONV) {
         const auto& input3 = model.operands[operation.inputs[OP_PADL_IDX_CONV]];
         const auto& input4 = model.operands[operation.inputs[OP_PADR_IDX_CONV]];
         const auto& input5 = model.operands[operation.inputs[OP_PADH_IDX_CONV]];
         const auto& input6 = model.operands[operation.inputs[OP_PADW_IDX_CONV]];
         const auto& input7 = model.operands[operation.inputs[OP_STRD_WD_IDX_EXPL_CONV]];
         const auto& input8 = model.operands[operation.inputs[OP_STRD_HT_IDX_EXPL_CONV]];
-        const auto& input9 = model.operands[operation.inputs[OP_DW_CONV_DPM_EXPL]];
-        const auto& input10 =
-            model.operands[operation.inputs[OP_ACTV_FUNC_IDX_EXPL_DW_CONV]];
+        const auto& input9 = model.operands[operation.inputs[OP_ACTV_FUNC_IDX_EXPL_CONV]];
 
         if (input3.type != OperandType::INT32 || input4.type != OperandType::INT32 ||
             input5.type != OperandType::INT32 || input6.type != OperandType::INT32 ||
             input7.type != OperandType::INT32 || input8.type != OperandType::INT32 ||
-            input9.type != OperandType::INT32 || input10.type != OperandType::INT32) {
-            VLOG(L1, "NNERR:inputs 3-10 invalid operand types");
+            input9.type != OperandType::INT32) {
+            VLOG(L1, "NNERR:inputs 3-9 invalid operand types");
             return false;
         }
     }
@@ -111,23 +113,30 @@ bool validate(const Operation& operation, const Model& model){
     return true;
 }
 
-bool initialize(const std::string& device){
+bool initialize(const std::string& device, std::shared_ptr<CreateNgraph> &mCreateNgraph){
     if (device.compare("CPU")){
-        VLOG(L1, "OperationType::DEPTHWISE_CONV_2D");
+        VLOG(L1, "OperationType::CONV_2D");
         dumpOperationParam(operation);
 
         auto input = getPort(operation.inputs[OP_INPUT_IDX_CONV]);
-        auto filter = GetConstWeightsOperandAsTensor(
-            operation.inputs[OP_FILTER_IDX_CONV]);  //[depth_out, 1, filter_height,
-                                                    // filter_width] OIHW
+        auto filter = GetConstOperandAsTensor(operation.inputs[OP_FILTER_IDX_CONV],
+                                            OP_FILTER_IDX_CONV);  // OIHW
         auto bias = GetConstOperandAsTensor(operation.inputs[OP_BIAS_IDX_CONV], OP_BIAS_IDX_CONV);
+        if (bias == nullptr) {
+            VLOG(L1, "NNERR:bias blob is NULL");
+            return false;
+        }
+
+        if (operation.outputs.size() > 1) {
+            VLOG(L1, "NNERR:More than one output for Conv2d,Aborting!!");
+            return false;
+        }
 
         const auto inputDims = input->getTensorDesc().getDims();
         const auto filterDims = filter->getTensorDesc().getDims();
 
         ConvolutionParams prms;
 
-        int batches = (int)inputDims[0];
         int in_channels = (int)inputDims[1];
         int input_height = (int)inputDims[2];
         int input_width = (int)inputDims[3];
@@ -137,32 +146,32 @@ bool initialize(const std::string& device){
         int filter_height = (int)filterDims[2];
         int filter_width = (int)filterDims[3];
 
-        int fusion_index = -1;
-        int depth_multiplier = 0;
+        int32_t fusion_index = -1;
 
-        if (operation.inputs.size() == 11) {
+        if (operation.inputs.size() == EXPL_PAD_PARAMS_CONV) {
             VLOG(L1, "Explicit padding requested");
             mPadreq = EXPL_PAD;
             prms.padType = "explicit";
-            prms.pad_start = {PARAM_I32(3), PARAM_I32(5)};
-            prms.pad_end = {PARAM_I32(4), PARAM_I32(6)};
-            prms.stride = {PARAM_I32(7), PARAM_I32(8)};
-            prms.kernel = {(int)filter_width, (int)filter_height};
-            fusion_index = 10;
-            prms.groups = in_channels;  // working
-            depth_multiplier = PARAM_I32(9);
-            prms.num_output_planes =
-                in_channels * depth_multiplier;     // same as filter_out; //dims[0]; //depth out
-        } else if (operation.inputs.size() == 8) {  // implicit padding
+            prms.pad_start.x = PARAM_I32(OP_PADL_IDX_CONV);
+            prms.pad_start.y = PARAM_I32(OP_PADH_IDX_CONV);
+            CHECK_OPERAND_2D(prms.pad_start, OP_PADL_IDX_CONV, OP_PADH_IDX_CONV);
+            prms.pad_end.x = PARAM_I32(OP_PADR_IDX_CONV);
+            prms.pad_end.y = PARAM_I32(OP_PADW_IDX_CONV);
+            CHECK_OPERAND_2D(prms.pad_end, OP_PADR_IDX_CONV, OP_PADW_IDX_CONV);
+            prms.stride.x = PARAM_I32(OP_STRD_WD_IDX_EXPL_CONV);
+            prms.stride.y = PARAM_I32(OP_STRD_HT_IDX_EXPL_CONV);
+            CHECK_OPERAND_2D(prms.stride, OP_STRD_WD_IDX_EXPL_CONV, OP_STRD_HT_IDX_EXPL_CONV);
+            prms.kernel = {filter_width, filter_height};
+            prms.num_output_planes = filter_out;  // depth out
+            fusion_index = OP_ACTV_FUNC_IDX_EXPL_CONV;
+        } else if (operation.inputs.size() == IMPL_PAD_PARAMS_CONV) {  // PAD SAME
             VLOG(L1, "Implicit padding requested");
             mPadreq = IMPL_PAD;
-            const auto pad_type = PARAM_I32(3);
+            const auto pad_type = PARAM_I32(3);  // padding_implicit
             int stride_width = PARAM_I32(4);
             int stride_height = PARAM_I32(5);
-
             int padding_left, padding_right;
             int padding_top, padding_bottom;
-
             if (pad_type == kPaddingSame) {
                 calculateExplicitPadding(input_width, stride_width, filter_width,
                                         pad_type /*padding_implicit*/, &padding_left, &padding_right);
@@ -185,23 +194,29 @@ bool initialize(const std::string& device){
                 prms.padType = "valid";
             }
             prms.stride = {stride_width, stride_height};
-            prms.kernel = {(int)filter_width, (int)filter_height};
-            fusion_index = 7;
-            prms.groups = in_channels;  // working
-            depth_multiplier = PARAM_I32(6);
-            prms.num_output_planes = in_channels * depth_multiplier;  // same as filter_out;//depth out
+            prms.kernel = {filter_width, filter_height};
+            prms.num_output_planes = filter_out;  // depth out
+            fusion_index = OP_ACTV_FUNC_IDX_IMPL_CONV;
         }
 
-        prms.weights = static_cast<IRBlob::Ptr>(filter);
+        if (bias && bias->size() != prms.num_output_planes) {
+            VLOG(L1, "NNERR:biases size (%d)mismatch output planes (%d),warning", bias->size(),
+                prms.num_output_planes);
+            // return false;
+            // nnAssert(false);
+        }
 
-        const auto weightDims = prms.weights->getTensorDesc().getDims();
+        // input_size (validate)
+        if (filter_in != in_channels) {
+            VLOG(L1, "NNERR:filter depth_in size (%d) mismatch input depth (%d),warning!!", filter_in,
+                in_channels);
+            // return false;
+            // nnAssert(false);
+        }
 
-        nnAssert(filter_out == in_channels * depth_multiplier);
-        VLOG(L1, "batches %d, channels %d, input_height: %d, input_width %d", batches, in_channels,
-            input_height, input_width);
-        VLOG(L1, "filter_in %d, filter_out %d, filter_height: %d, filter_width %d", filter_in,
-            filter_out, filter_height, filter_width);
-        VLOG(L1, "depth multiplier %d", depth_multiplier);
+        prms.weights = static_cast<IRBlob::Ptr>(
+            filter);  // layout [filter_in, filter_out, filter_height, filter_width]
+        const auto weightsDims = prms.weights->getTensorDesc().getDims();
 
         prms.biases = static_cast<IRBlob::Ptr>(bias);
         auto out = Convolution(input, prms);
@@ -213,13 +228,19 @@ bool initialize(const std::string& device){
             VLOG(L1, "invalid fusion index");
             nnAssert(false);
         }
-
-        mPorts[operation.outputs[0]] = handleFusion(out, PARAM_I32(fusion_index));
+        auto acv_func = PARAM_I32(fusion_index);
+        if (acv_func < 0) {
+            VLOG(L1, "Invalid Activation function passed,aborting!!");
+            return false;
+        }
+        // now here the out is next layer's input , and next layer is an activation
+        // layer..relu/sigmoid etc...
+        mPorts[operation.outputs[0]] = handleFusion(out, acv_func, mCreateNgraph);
 
         VLOG(L1, "----------------------------------------------");
         VLOGDIMS(L1, inputDims, "inputs dims");
         VLOGDIMS(L1, filterDims, "filter dims");
-        VLOGDIMS(L1, weightDims, "weight dims");
+        VLOGDIMS(L1, weightsDims, "weights dims");
         VLOG(L1, "----------------------------------------------");
 
         return true;
@@ -230,20 +251,6 @@ bool initialize(const std::string& device){
         return false;
     }
 }
-
-struct GenConvParams {
-    int groups = 1;
-    std::vector<float> weightsBuf;
-    std::vector<size_t> weightsDims;
-    std::vector<float> biasesBuf;
-    std::vector<size_t> biasesDims;
-    size_t weightsSize;
-    std::vector<size_t> strides;
-    std::vector<std::ptrdiff_t> pads_begin;
-    std::vector<std::ptrdiff_t> pads_end;
-    std::vector<size_t> dilations;
-    const char *pad_type;
-};
 
 inline void ConvolutionParamsToGenConvParams(ConvolutionParams &cPrms, GenConvParams &gPrms,
                                              IRBlob::Ptr weights, IRBlob::Ptr biases) {

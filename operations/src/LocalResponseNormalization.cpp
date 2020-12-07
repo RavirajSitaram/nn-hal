@@ -15,6 +15,7 @@
  */
 
 #include "common.h"
+#include "LocalResponseNormalization.h"
 
 namespace android {
 namespace hardware {

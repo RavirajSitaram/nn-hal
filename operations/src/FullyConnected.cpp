@@ -15,6 +15,7 @@
  */
 
 #include "common.h"
+#include "FullyConnected.h"
 
 namespace android {
 namespace hardware {
@@ -69,7 +70,7 @@ namespace fullyconnected{
         return true;
     }
 
-    bool initialize(const std::string& device){
+    bool initialize(const std::string& device, std::shared_ptr<CreateNgraph> &mCreateNgraph){
         if (device.compare("CPU")){
             VLOG(L1, "OperationType::FULLY_CONNECTED");
             dumpOperationParam(operation);
@@ -134,7 +135,7 @@ namespace fullyconnected{
 
             auto out = weights * input + bias;
 
-            mPorts[operation.outputs[0]] = handleFusion(out, PARAM_I32(3));
+            mPorts[operation.outputs[0]] = handleFusion(out, PARAM_I32(3), mCreateNgraph);
 
             VLOG(L1, "----------------------------------------------");
             VLOGDIMS(L1, inputDims, "inputs dims");

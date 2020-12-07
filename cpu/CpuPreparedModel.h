@@ -27,6 +27,7 @@
 #include <string>
 
 #include "BasePreparedModel.h"
+#include "operations/include/ops.h"
 
 using namespace InferenceEngine;
 

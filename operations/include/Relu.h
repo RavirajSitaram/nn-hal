@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifndef RELU_H
+#define RELU_H
 
 #include "common.h"
 
@@ -20,26 +22,17 @@ namespace android {
 namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
-namespace mul{
+namespace relu{
 
-bool validate(const Operation& operation, const Model& model){
-    return true;
-}
-
-bool initialize(const std::string& device){
-    if (device.compare("CPU")){
-        mPorts[operation.outputs[0]] =
-            handleFusion(getPort(operation.inputs[0]) * getPort(operation.inputs[1]), PARAM_I32(2));
-        return true;
-    } else if (device.compare("GNA")){
-        return false;
-    } else {
-        return false;
-    }
-}
+bool validate(const Operation& operation, const Model& model);
+bool initialize(const std::string& device);
+template <typename T>
+OutputPort ReLU(const T &src);
 
 }
 }  // namespace nnhal
 }  // namespace neuralnetworks
 }  // namespace hardware
 }  // namespace android
+
+#endif  // RELU_H

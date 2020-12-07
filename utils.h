@@ -14,6 +14,17 @@
  * limitations under the License.
  */
 
+#include <android-base/logging.h>
+#include <android/log.h>
+#include <log/log.h>
+#include "BasePreparedModel.h"
+#include "Driver.h"
+
+namespace android {
+namespace hardware {
+namespace neuralnetworks {
+namespace nnhal {
+
 enum DebugLevel {
     L0,
     L1,
@@ -65,9 +76,9 @@ unsigned int debugMask = ((1 << (L1 + 1)) - 1);
              size > 2 ? (d)[2] : 0, size > 3 ? (d)[3] : 0);                            \
     } while (0)
 
-#define dumpOperand(index)                                      \
+#define dumpOperand(index, model)                                      \
     do {                                                        \
-        const auto op = mModel.operands[index];                 \
+        const auto op = model.operands[index];                 \
         ALOGI("---------------------------------------------"); \
         ALOGI("Operand index: %d", index);                      \
         ALOGI("%s", toString(op).c_str());                      \
@@ -120,6 +131,8 @@ unsigned int debugMask = ((1 << (L1 + 1)) - 1);
 #define IMPL_PAD_PARAMS_CONV 7
 #define EXPL_PAD_PARAMS_DW_CONV 11
 #define IMPL_PAD_PARAMS_DW_CONV 8
+#define EXPL_PAD 1
+#define IMPL_PAD 2
 #define SOFTMAX_INPUT_PARAMS 2
 #define NHWC_DIM_NUM 4
 #define NHWC_CH_IDX 3
@@ -192,15 +205,6 @@ unsigned int debugMask = ((1 << (L1 + 1)) - 1);
 
 #define EXP_MASK_F32 0x7F800000U
 #define EXP_MASK_F16 0x7C00U
-
-#define PARAM_I32(i) ParseOperationInput<int32_t>(mModel, operation, i)
-#define PARAM_FP(i) ParseOperationInput<float>(mModel, operation, i)
-
-namespace android {
-namespace hardware {
-namespace neuralnetworks {
-namespace nnhal {
-namespace {
 
 unsigned short float2half(unsigned f) {
     unsigned f_exp, f_sig;
@@ -505,57 +509,29 @@ std::vector<T> GetConstVecFromBuffer(const uint8_t* buf, uint32_t len) {
     return ret;
 }
 
-const uint8_t* GetOperandMemory(const Model& model, uint32_t index,
-                                               uint32_t& len_out) {
-    const auto op = model.operands[index];
-    len_out = op.location.length;
-    if (op.lifetime == OperandLifeTime::CONSTANT_COPY) {
-        if (op.location.poolIndex != 0) {
-            ALOGE("CONSTANT_COPY expects poolIndex to be 0");
-            nnAssert(false);
-        }
-        VLOG(L1, "operand lifetime OperandLifeTime::CONSTANT_COPY");
-        return (const_cast<uint8_t*>(&model.operandValues[op.location.offset]));
-        // to.numberOfUsesLeft = 0;
-    } else if (op.lifetime == OperandLifeTime::CONSTANT_REFERENCE) {
-        VLOG(L1, "operand lifetime OperandLifeTime::CONSTANT_REFERENCE");
-        auto poolIndex = op.location.poolIndex;
-        // nnAssert(poolIndex < mPoolInfos.size()); //aks fix me
-        auto& r = mPoolInfos[poolIndex];
-        return (const_cast<uint8_t*>(r.buffer + op.location.offset));
-    } else if (op.lifetime == OperandLifeTime::MODEL_INPUT ||
-               op.lifetime == OperandLifeTime::MODEL_OUTPUT ||
-               op.lifetime == OperandLifeTime::NO_VALUE) {
-        VLOG(L1, "operand lifetime OperandLifeTime::MODEL_INPUT||MODEL_OUTPUT||NO_VALUE");
-        len_out = sizeOfData(op.type, op.dimensions);
-        return nullptr;
-    } else if (op.lifetime == OperandLifeTime::TEMPORARY_VARIABLE) {
-        VLOG(L1, "operand lifetime OperandLifeTime::TEMPORARY_VARIABLE");
-        VLOG(L1, "operand is expected to be const, but lifetime is %d", op.lifetime);
-        len_out = sizeOfData(op.type, op.dimensions);
-        // nnAssert(false);
-        return nullptr;
+int sizeOfData(OperandType type, std::vector<uint32_t> dims) {
+    int size;
+    switch (type) {
+        case OperandType::FLOAT32:
+            size = 4;
+            break;
+        case OperandType::TENSOR_FLOAT32:
+            size = 4;
+            break;
+        case OperandType::TENSOR_INT32:
+            size = 4;
+            break;
+        case OperandType::TENSOR_QUANT8_ASYMM:
+        case OperandType::INT32:
+            size = 1;
+            break;
+
+        default:
+            size = 0;
     }
+    for (auto d : dims) size *= d;
 
-    ALOGE("operand is expected to be const, but lifetime is %d", op.lifetime);
-    nnAssert(false);  // temp fix since some time const operand set as TEMPORARY_VARIABLE
-    return nullptr;
-}
-
-template <typename T>
-T GetConstOperand(const Model& model, uint32_t index) {
-    dumpOperand(index);
-    uint32_t len;
-    const uint8_t* buf = GetOperandMemory(model, index, len);
-    return GetConstFromBuffer<T>(buf, len);
-}
-
-template <typename T>
-std::vector<T> GetConstVecOperand(const Model& model, uint32_t index) {
-    dumpOperand(index);
-    uint32_t len;
-    const uint8_t* buf = GetOperandMemory(model, index, len);
-    return GetConstVecFromBuffer<T>(buf, len);
+    return size;
 }
 
 #ifdef NN_DEBUG
@@ -601,18 +577,6 @@ void printOperandbuf(int level, const uint8_t* buffer, const std::vector<uint32_
 }
 
 #endif
-
-bool isConst(int index) {
-    VLOG(L1, "---------------------------------------------");
-    VLOG(L1, "Operand index: %d", index);
-    const auto op = mModel.operands[index];
-    VLOG(L1, " %s", toString(op).c_str());
-    bool ret = (op.lifetime == OperandLifeTime::CONSTANT_COPY ||
-                op.lifetime == OperandLifeTime::CONSTANT_REFERENCE);
-    VLOG(L1, "%s", ret ? "Const" : "Non-Const");
-    VLOG(L1, "---------------------------------------------");
-    return ret;
-}
 
 template <typename T>
 T getOperandConstVal(const Model& model, const Operand& operand) {

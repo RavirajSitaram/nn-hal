@@ -1,26 +1,44 @@
+#ifndef CREATE_NGRAPH_H
+#define CREATE_NGRAPH_H
+
 #include <inference_engine.hpp>
 #include <ngraph/ngraph.hpp>
 #include <ngraph/opsets/opset3.hpp>
 #define NNLOG1
 
 #include "IRLayers.h"
-#ifdef NNLOG1
+
 #define LOG_TAG "CreateNgraph"
 #include <android/log.h>
 #include <log/log.h>
+#include "operations/include/common.h"
 #define LOGDIMS(d, header)                                                           \
     do {                                                                             \
         auto size = (d).size();                                                      \
         ALOGD("%s: vectors {%d, %d, %d, %d}", header, (d)[0], size > 1 ? (d)[1] : 0, \
               size > 2 ? (d)[2] : 0, size > 3 ? (d)[3] : 0);                         \
     } while (0)
-#endif
 
 namespace android {
 namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
 class CreateNgraph {
+    
+struct GenConvParams {
+    int groups = 1;
+    std::vector<float> weightsBuf;
+    std::vector<size_t> weightsDims;
+    std::vector<float> biasesBuf;
+    std::vector<size_t> biasesDims;
+    size_t weightsSize;
+    std::vector<size_t> strides;
+    std::vector<std::ptrdiff_t> pads_begin;
+    std::vector<std::ptrdiff_t> pads_end;
+    std::vector<size_t> dilations;
+    const char *pad_type;
+};
+
 private:
     std::map<std::string, std::shared_ptr<ngraph::Node>> mNodes;
     ngraph::ParameterVector mInputParams;
@@ -29,9 +47,9 @@ private:
 
 public:
     InferenceEngine::CNNNetwork generate(std::string xmlPath, std::string binPath) {
-#ifdef NNLOG1
+
         ALOGD("%s : Called with xmlPath %s", __func__, xmlPath.c_str());
-#endif
+
         auto ngraph_function = std::make_shared<ngraph::Function>(mResultNodes, mInputParams);
         InferenceEngine::CNNNetwork cnn = InferenceEngine::CNNNetwork(ngraph_function);
         try {
@@ -42,23 +60,23 @@ public:
         return cnn;
     }
     void addNode(std::string nodeName, std::shared_ptr<ngraph::Node> node) {
-#ifdef NNLOG1
+
         ALOGD("%s : nodeName=%s adding node : %s", __func__, nodeName.c_str(),
               node->get_name().c_str());
-#endif
+
         mLastNode = node;
         mNodes[nodeName] = node;
     }
     std::string getNodeName(std::string nodeName) {
-#ifdef NNLOG1
+
         ALOGD("%s : nodeName=%s ", __func__, nodeName.c_str());
-#endif
+
         return mNodes[nodeName]->get_name();
     }
     void setResultNode(std::string nodeName) {
-#ifdef NNLOG1
+
         ALOGD("%s : nodeName=%s ", __func__, nodeName.c_str());
-#endif
+
         // Transpose to NHWC for the Result node
         ngraph::AxisVector order{0, 2, 3, 1};
         const auto order_node = ngraph::opset3::Constant::create(
@@ -71,31 +89,31 @@ public:
         mResultNodes.push_back(mNodes[nodeName]);
     }
     void addInputParameter(std::string nodeName, std::vector<size_t> shape) {
-#ifdef NNLOG1
+
         ALOGD("%s : nodeName=%s ", __func__, nodeName.c_str());
         LOGDIMS(shape, __func__);
-#endif
+
         std::shared_ptr<ngraph::opset3::Parameter> input =
             std::make_shared<ngraph::opset3::Parameter>(ngraph::element::f32, ngraph::Shape(shape));
         mInputParams.push_back(input);
         addNode(nodeName, input);
     }
     void addClamp(std::string nodeName, std::string inputName, const double min, const double max) {
-#ifdef NNLOG1
+
         ALOGD("%s : nodeName=%s inputName=%s ", __func__, nodeName.c_str(), inputName.c_str());
-#endif
+
         addNode(nodeName, std::make_shared<ngraph::opset3::Clamp>(mNodes[inputName], min, max));
     }
     void addRelu(std::string nodeName, std::string inputName) {
-#ifdef NNLOG1
+
         ALOGD("%s : nodeName=%s inputName=%s ", __func__, nodeName.c_str(), inputName.c_str());
-#endif
+
         addNode(nodeName, std::make_shared<ngraph::opset3::Relu>(mNodes[inputName]));
     }
     void addReshape(std::string nodeName, std::string inputName, std::vector<size_t> shape) {
-#ifdef NNLOG1
+
         ALOGD("%s : nodeName=%s inputName=%s ", __func__, nodeName.c_str(), inputName.c_str());
-#endif
+
         try {
             // Pre Transpose [[ NCHW > NHWC
             ngraph::AxisVector pre_order{0, 2, 3, 1};
@@ -130,9 +148,9 @@ public:
     void addConcat(std::string nodeName, std::vector<std::string> inputNames, int axis) {
         std::string str;
         for (const auto& name : inputNames) str = str + name + ";";
-#ifdef NNLOG1
+
         ALOGD("%s : nodeName=%s inputNames=%s ", __func__, nodeName.c_str(), str.c_str());
-#endif
+
         std::vector<std::shared_ptr<ngraph::Node>> inputs;
         for (int i = 0; i < inputNames.size(); ++i) {
             inputs.push_back(mNodes[inputNames[i]]);
@@ -144,10 +162,10 @@ public:
         }
     }
     void addConvolution(std::string nodeName, std::string inputName, GenConvParams& gPrms) {
-#ifdef NNLOG1
+
         ALOGD("%s : nodeName=%s inputName=%s ", __func__, nodeName.c_str(), inputName.c_str());
         LOGDIMS(gPrms.weightsDims, __func__);
-#endif
+
         std::shared_ptr<ngraph::Node> input;
         try {
             ngraph::Shape constShape = ngraph::Shape(
@@ -187,11 +205,11 @@ public:
             ALOGE("%s Exception !!! %s", __func__, ex.what());
         }
         if (gPrms.biasesBuf.size() > 0) {
-#ifdef NNLOG1
+
             ALOGD("%s : nodeName=%s has biases size %d", __func__, nodeName.c_str(),
                   gPrms.biasesBuf.size());
             LOGDIMS(gPrms.biasesDims, __func__);
-#endif
+
             std::vector<size_t> shape(input->get_shape().size(), 1);
             shape[1] = gPrms.biasesDims[0];
             ngraph::Shape constShape = ngraph::Shape(shape);
@@ -211,3 +229,5 @@ public:
 }  // namespace neuralnetworks
 }  // namespace hardware
 }  // namespace android
+
+#endif  // CREATE_NGRAPH_H

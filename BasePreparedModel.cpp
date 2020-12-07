@@ -19,7 +19,7 @@
 #include <android/log.h>
 #include <log/log.h>
 #include <fstream>
-#include <thread>
+
 #include "ValidateHal.h"
 
 #include <cutils/properties.h>
@@ -27,12 +27,15 @@
 #define DISABLE_ALL_QUANT
 #define LOG_TAG "BasePreparedModel"
 
-using namespace android::nn;
+#define PARAM_I32(i) ParseOperationInput<int32_t>(mModel, operation, i)
+#define PARAM_FP(i) ParseOperationInput<float>(mModel, operation, i)
 
 namespace android {
 namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
+
+using namespace android::nn;
 
 using time_point = std::chrono::steady_clock::time_point;
 
@@ -286,31 +289,6 @@ IRBlob::Ptr Permute(IRBlob::Ptr ptr, const vec<unsigned int>& order) {
     return ptr;
 }
 
-int sizeOfData(OperandType type, std::vector<uint32_t> dims) {
-    int size;
-    switch (type) {
-        case OperandType::FLOAT32:
-            size = 4;
-            break;
-        case OperandType::TENSOR_FLOAT32:
-            size = 4;
-            break;
-        case OperandType::TENSOR_INT32:
-            size = 4;
-            break;
-        case OperandType::TENSOR_QUANT8_ASYMM:
-        case OperandType::INT32:
-            size = 1;
-            break;
-
-        default:
-            size = 0;
-    }
-    for (auto d : dims) size *= d;
-
-    return size;
-}
-
 bool BasePreparedModel::isOperationSupported(const Operation& operation, const Model& model) {
     VLOG(L1, "Check operation %d", operation.type);
 
@@ -468,6 +446,72 @@ T BasePreparedModel::ParseOperationInput(const Model& model, const Operation& op
     VLOG(L1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
 
     return value;
+}
+
+
+const uint8_t* BasePreparedModel::GetOperandMemory(const Model& model, uint32_t index,
+                                               uint32_t& len_out) {
+    const auto op = model.operands[index];
+    len_out = op.location.length;
+    if (op.lifetime == OperandLifeTime::CONSTANT_COPY) {
+        if (op.location.poolIndex != 0) {
+            ALOGE("CONSTANT_COPY expects poolIndex to be 0");
+            nnAssert(false);
+        }
+        VLOG(L1, "operand lifetime OperandLifeTime::CONSTANT_COPY");
+        return (const_cast<uint8_t*>(&model.operandValues[op.location.offset]));
+        // to.numberOfUsesLeft = 0;
+    } else if (op.lifetime == OperandLifeTime::CONSTANT_REFERENCE) {
+        VLOG(L1, "operand lifetime OperandLifeTime::CONSTANT_REFERENCE");
+        auto poolIndex = op.location.poolIndex;
+        // nnAssert(poolIndex < mPoolInfos.size()); //aks fix me
+        auto& r = mPoolInfos[poolIndex];
+        return (const_cast<uint8_t*>(r.buffer + op.location.offset));
+    } else if (op.lifetime == OperandLifeTime::MODEL_INPUT ||
+               op.lifetime == OperandLifeTime::MODEL_OUTPUT ||
+               op.lifetime == OperandLifeTime::NO_VALUE) {
+        VLOG(L1, "operand lifetime OperandLifeTime::MODEL_INPUT||MODEL_OUTPUT||NO_VALUE");
+        len_out = sizeOfData(op.type, op.dimensions);
+        return nullptr;
+    } else if (op.lifetime == OperandLifeTime::TEMPORARY_VARIABLE) {
+        VLOG(L1, "operand lifetime OperandLifeTime::TEMPORARY_VARIABLE");
+        VLOG(L1, "operand is expected to be const, but lifetime is %d", op.lifetime);
+        len_out = sizeOfData(op.type, op.dimensions);
+        // nnAssert(false);
+        return nullptr;
+    }
+
+    ALOGE("operand is expected to be const, but lifetime is %d", op.lifetime);
+    nnAssert(false);  // temp fix since some time const operand set as TEMPORARY_VARIABLE
+    return nullptr;
+}
+
+template <typename T>
+T BasePreparedModel::GetConstOperand(const Model& model, uint32_t index) {
+    dumpOperand(index, model);
+    uint32_t len;
+    const uint8_t* buf = GetOperandMemory(model, index, len);
+    return GetConstFromBuffer<T>(buf, len);
+}
+
+template <typename T>
+std::vector<T> BasePreparedModel::GetConstVecOperand(const Model& model, uint32_t index) {
+    dumpOperand(index, model);
+    uint32_t len;
+    const uint8_t* buf = GetOperandMemory(model, index, len);
+    return GetConstVecFromBuffer<T>(buf, len);
+}
+
+bool isConst(int index) {
+    VLOG(L1, "---------------------------------------------");
+    VLOG(L1, "Operand index: %d", index);
+    const auto op = mModel.operands[index];
+    VLOG(L1, " %s", toString(op).c_str());
+    bool ret = (op.lifetime == OperandLifeTime::CONSTANT_COPY ||
+                op.lifetime == OperandLifeTime::CONSTANT_REFERENCE);
+    VLOG(L1, "%s", ret ? "Const" : "Non-Const");
+    VLOG(L1, "---------------------------------------------");
+    return ret;
 }
 
 OutputPort BasePreparedModel::getPort(int index) {

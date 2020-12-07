@@ -13,18 +13,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifndef OPS_H
+#define OPS_H
 
-#include "utils.h"
+#include "Add.h"
+#include "AveragePool.h"
+#include "Concatination.h"
+#include "Convolution.h"
+#include "DepthwiseConvolution.h"
+#include "FullyConnected.h"
+#include "L2Normalization.h"
+#include "LocalResponseNormalization.h"
+#include "Logistic.h"
+#include "MaxPool.h"
+#include "Mul.h"
+#include "Relu.h"
+#include "Relu1.h"
+#include "Relu6.h"
+#include "Softmax.h"
+#include "Tanh.h"
 
-namespace android {
-namespace hardware {
-namespace neuralnetworks {
-namespace nnhal {
-namespace {
-
-
-
-}  // namespace nnhal
-}  // namespace neuralnetworks
-}  // namespace hardware
-}  // namespace android
+#endif  // OPS_H

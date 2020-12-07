@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ANDROID_ML_NN_VPU_DRIVER_H
-#define ANDROID_ML_NN_VPU_DRIVER_H
+#ifndef ANDROID_ML_NN_DRIVER_H
+#define ANDROID_ML_NN_DRIVER_H
 #include <android/hardware/neuralnetworks/1.0/IDevice.h>
 #include <android/hardware/neuralnetworks/1.0/IExecutionCallback.h>
 #include <android/hardware/neuralnetworks/1.0/IPreparedModel.h>
@@ -28,6 +28,7 @@
 #include <android/hardware/neuralnetworks/1.2/IPreparedModel.h>
 #include <android/hardware/neuralnetworks/1.2/IPreparedModelCallback.h>
 #include <android/hardware/neuralnetworks/1.2/types.h>
+
 #include <string>
 
 namespace android {
@@ -55,6 +56,8 @@ using Operation = ::android::hardware::neuralnetworks::V1_2::Operation;
 using OperationType = ::android::hardware::neuralnetworks::V1_2::OperationType;
 using OperandType = ::android::hardware::neuralnetworks::V1_2::OperandType;
 using Capabilities = ::android::hardware::neuralnetworks::V1_2::Capabilities;
+
+// using namespace V1_3 = ::android::hardware::neuralnetworks::V1_3;
 
 using ::android::hardware::MQDescriptorSync;
 using HidlToken = android::hardware::hidl_array<uint8_t, 32>;

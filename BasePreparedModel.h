@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef ANDROID_ML_NN_PREPAREDMODEL_H
-#define ANDROID_ML_NN_PREPAREDMODEL_H
+#ifndef ANDROID_ML_NN_BASEPREPAREDMODEL_H
+#define ANDROID_ML_NN_BASEPREPAREDMODEL_H
 
 #include <android/hardware/neuralnetworks/1.2/IPreparedModel.h>
 #include <android/hardware/neuralnetworks/1.2/types.h>
@@ -28,6 +28,9 @@
 
 #include "Driver.h"
 #include "utils.h"
+#include "create_ngraph.hpp"
+#include "IENetwork.h"
+#include "ops.h"
 
 using ::android::hardware::MQDescriptorSync;
 using ::android::hidl::memory::V1_0::IMemory;
@@ -38,6 +41,18 @@ namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
 namespace {
+
+template <class T>
+using vec = std::vector<T>;
+typedef uint8_t* memory;
+
+// The type and dimensions of an operand.
+struct Shape {
+    OperandType type;
+    std::vector<uint32_t> dimensions;
+    float scale;
+    int32_t offset;
+};
 
 // Information we maintain about each operand during execution that
 // may change during execution.
@@ -57,7 +72,6 @@ struct RunTimeOperandInfo {
                 .dimensions = dimensions,
                 .scale = scale,
                 .offset = zeroPoint,
-                .extraParams = extraParams,
         };
     }
 };
@@ -124,11 +138,18 @@ class BasePreparedModel : public V1_2::IPreparedModel{
         bool finalizeOutput();
         template <typename T>
         T ParseOperationInput(const Model& model, const Operation& operation, uint32_t index);
+        template <typename T>
+        T GetConstOperand(const Model& model, uint32_t index);
+        template <typename T>
+        std::vector<T> GetConstVecOperand(const Model& model, uint32_t index);
+        const uint8_t* GetOperandMemory(const Model& model, uint32_t index, uint32_t& len_out);
         virtual Blob::Ptr GetConstWeightsOperandAsTensor(uint32_t index);
         virtual Blob::Ptr GetConstOperandAsTensor(int operand_index, int operation_idx);
         virtual Blob::Ptr GetInOutOperandAsBlob(RunTimeOperandInfo& op, const uint8_t* buf,
                                             uint32_t& len);
+        bool isConst(int index);
         OutputPort getPort(int index);
+        void createNGraph();
 
         std::string mTargetDevice;
         Model mModel;
@@ -139,8 +160,9 @@ class BasePreparedModel : public V1_2::IPreparedModel{
         ExecuteNetwork* enginePtr;
         uint32_t mPadreq;
         std::shared_ptr<CreateNgraph> mCreateNgraph;
+        std::shared_ptr<CreateNgraph>* mCreateNgraphPtr = &mCreateNgraph;
         bool mUseNgraph;
-}
+};
 
 }  // namespace nnhal
 }  // namespace neuralnetworks

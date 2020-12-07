@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifndef TANH_H
+#define TANH_H
 
 #include "common.h"
 
@@ -22,22 +24,13 @@ namespace neuralnetworks {
 namespace nnhal {
 namespace tanh{
 
-bool validate(const Operation& operation, const Model& model){
-    return true;
-}
-
-bool initialize(const std::string& device){
-    if (device.compare("CPU")){
-    
-    } else if (device.compare("GNA")){
-    
-    } else {
-        return false;
-    }
-}
+bool validate(const Operation& operation, const Model& model);
+bool initialize(const std::string& device);
 
 }
 }  // namespace nnhal
 }  // namespace neuralnetworks
 }  // namespace hardware
 }  // namespace android
+
+#endif  // TANH_H

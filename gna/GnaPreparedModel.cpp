@@ -48,10 +48,10 @@ bool GnaPreparedModel::initialize() {
         switch (operation.type) {
 
             case OperationType::CONCATENATION:{
-                success = concat::initialize(mTargetDevice);
+                success = concat::initialize(mTargetDevice, mCreateNgraphPtr);
             } break;
             case OperationType::FULLY_CONNECTED:{
-                success = fullyconnected::initialize(mTargetDevice);
+                success = fullyconnected::initialize(mTargetDevice, mCreateNgraphPtr);
             } break;
             default:
                 VLOG(L1, "unsupported operation %d", operation.type);

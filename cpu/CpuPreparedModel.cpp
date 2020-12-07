@@ -47,52 +47,52 @@ bool CpuPreparedModel::initialize() {
         dumpOperation(operation);
         switch (operation.type) {
             case OperationType::ADD:{
-                success = add::intialize(mTargetDevice);
+                success = add::intialize(mTargetDevice, mCreateNgraphPtr);
             } break;
             case OperationType::MUL:{
-                success = mul::intialize(mTargetDevice);
+                success = mul::intialize(mTargetDevice, mCreateNgraphPtr);
             } break;
             case OperationType::CONCATENATION:{
-                success = concat::intialize(mTargetDevice);
+                success = concat::intialize(mTargetDevice, mCreateNgraphPtr);
             } break;
             case OperationType::FULLY_CONNECTED:{
-                success = fullyconnected::initialize(mTargetDevice);
+                success = fullyconnected::initialize(mTargetDevice, mCreateNgraphPtr);
             } break;
             case OperationType::AVERAGE_POOL_2D:{
-                success = avgpool::initialize(operation);
+                success = avgpool::initialize(operation, mCreateNgraphPtr);
             } break;
             case OperationType::MAX_POOL_2D:{
-                success = maxpool::initialize(operation);
+                success = maxpool::initialize(operation, mCreateNgraphPtr);
             } break;
             case OperationType::CONV_2D:{
-                success = convolution::initialize(operation);
+                success = convolution::initialize(operation, mCreateNgraphPtr);
             } break;
             case OperationType::DEPTHWISE_CONV_2D:{
-                success = depthconv::initialize(operation);
+                success = depthconv::initialize(operation, mCreateNgraphPtr);
             } break;
             case OperationType::L2_NORMALIZATION:{
-                success = l2normalization::initialize(operation);
+                success = l2normalization::initialize(operation, mCreateNgraphPtr);
             } break;
             case OperationType::LOCAL_RESPONSE_NORMALIZATION:{
-                success = lrn::initialize(operation);
+                success = lrn::initialize(operation, mCreateNgraphPtr);
             } break;
             case OperationType::RELU:{
-                success = relu::initialize(operation);
+                success = relu::initialize(operation, mCreateNgraphPtr);
             } break;
             case OperationType::RELU1:{
-                success = relu1::initialize(operation);
+                success = relu1::initialize(operation, mCreateNgraphPtr);
             } break;
             case OperationType::RELU6:{
-                success = relu6::initialize(operation);
+                success = relu6::initialize(operation, mCreateNgraphPtr);
             } break;
             case OperationType::LOGISTIC:{
-                success = logistic::initialize(operation);
+                success = logistic::initialize(operation, mCreateNgraphPtr);
             } break;
             case OperationType::SOFTMAX:{
-                success = softmax::initialize(operation);
+                success = softmax::initialize(operation, mCreateNgraphPtr);
             } break;
             case OperationType::TANH:{
-                success = softmax::initialize(operation);
+                success = softmax::initialize(operation, mCreateNgraphPtr);
             } break;
             default:
                 VLOG(L1, "unsupported operation %d", operation.type);

@@ -41,8 +41,6 @@ int layer_name_count = 0;
 
 InferenceEngine::Precision g_layer_precision = InferenceEngine::Precision::UNSPECIFIED;
 
-const std::string ActivationLayer::ReLU("ReLU");
-
 void operator>>(const InferenceEngine::DataPtr &lhs, const InferenceEngine::CNNLayerPtr &rhs) {
     lhs->getInputTo()[rhs->name] = rhs;
     rhs->insData.push_back(lhs);

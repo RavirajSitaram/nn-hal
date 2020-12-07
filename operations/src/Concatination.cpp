@@ -15,6 +15,7 @@
  */
 
 #include "common.h"
+#include "Concatination.h"
 
 namespace android {
 namespace hardware {

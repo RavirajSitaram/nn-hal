@@ -15,44 +15,28 @@
  */
 
 #include "common.h"
+#include "Mul.h"
 
 namespace android {
 namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
-namespace l2normalization{
+namespace mul{
 
 bool validate(const Operation& operation, const Model& model){
     return true;
 }
 
-bool initialize(const std::string& device){
+bool initialize(const std::string& device, std::shared_ptr<CreateNgraph> &mCreateNgraph){
     if (device.compare("CPU")){
-        VLOG(L1, "OperationType::L2_NORMALIZATION");
-        dumpOperationParam(operation);
-        /*
-        * Inputs:
-        * 0: A 4-D tensor, of shape [batches, height, width, depth], specifying the input.
-        *
-        * Ouputs:
-        * 0: The output 4-D tensor, of shape [batches, out_height, out_width, depth].
-        */
-        // mPorts[operation.outputs[0]] = L2Normalization(getPort(operation.inputs[0]), true, false);
         mPorts[operation.outputs[0]] =
-            L2Normalization(getPort(operation.inputs[0]), false, false);  // passing accross false
+            handleFusion(getPort(operation.inputs[0]) * getPort(operation.inputs[1]), PARAM_I32(2), mCreateNgraph);
         return true;
     } else if (device.compare("GNA")){
         return false;
     } else {
         return false;
     }
-}
-
-inline OutputPort L2Normalization(const OutputPort &src, bool isAcross, bool isShareChannel) {
-    auto layer = Generic("Normalize", src);
-    addAttr(layer, "across_spatial", isAcross ? 1 : 0);
-    addAttr(layer, "channel_shared", isShareChannel ? 1 : 0);
-    return output(layer);
 }
 
 }

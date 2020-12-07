@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifndef COMMON_H
+#define COMMON_H
 
 #include <android-base/logging.h>
 #include <android/log.h>
@@ -23,18 +25,37 @@
 #include "IRLayer.h"
 #include "IRLayers.h"
 #include "Driver.h"
+#include "create_ngraph.hpp"
+#include "include/Relu.h"
 
 namespace android {
 namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
 
-OutputPort PreparedModel::handleFusion(const OutputPort& out, int32_t fusedOp) {
+inline OutputPort Clamp(const OutputPort &src, float min, float max) {
+    std::string name = "Clamp-";  // todo: make it unique
+    name = name << layer_name_count++;
+    InferenceEngine::LayerParams prms;
+    prms.precision = g_layer_precision;
+    prms.name = name;
+    auto layer = std::make_shared<InferenceEngine::ClampLayer>(prms);
+    layer->type = "Clamp";
+    layer->min_value = min;
+    layer->max_value = max;
+    layer->params["max"] = std::to_string(layer->max_value);
+    layer->params["min"] = std::to_string(layer->min_value);
+    src >> layer;
+    addOutput(layer, src->getTensorDesc().getDims());
+    return output(layer);
+}
+
+OutputPort handleFusion(const OutputPort& out, int32_t fusedOp, CreateNgraph& mCreateNgraph) {
     VLOG(L1, "fusedOp: %d", fusedOp);
     OutputPort ret = out;
     if (fusedOp == (int32_t)FusedActivationFunc::RELU) {
         VLOG(L1, "fusedOp is RELU");
-        ret = ReLU(out);
+        ret = relu::ReLU(out);
         mCreateNgraph->addRelu(ret->getName(), out->getName());
     } else if (fusedOp == (int32_t)FusedActivationFunc::RELU1) {
         VLOG(L1, "fusedOp is RELU1");
@@ -70,3 +91,5 @@ void calculateExplicitPadding(int32_t in_size, int32_t stride, int32_t filter_si
 }  // namespace neuralnetworks
 }  // namespace hardware
 }  // namespace android
+
+#endif  // COMMON_H

@@ -15,6 +15,7 @@
  */
 
 #include "common.h"
+#include "Softmax.h"
 
 namespace android {
 namespace hardware {

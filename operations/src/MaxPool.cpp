@@ -15,6 +15,7 @@
  */
 
 #include "common.h"
+#include "MaxPool.h"
 
 namespace android {
 namespace hardware {
@@ -84,7 +85,7 @@ bool validate(const Operation& operation, const Model& model){
     return true;
 }
 
-bool initialize(const std::string& device){
+bool initialize(const std::string& device, std::shared_ptr<CreateNgraph> &mCreateNgraph){
     if (device.compare("CPU")){
         VLOG(L1, "OperationType::MAX_POOL_2D");
 
@@ -147,7 +148,7 @@ bool initialize(const std::string& device){
 
         auto out = Pooling(input, kernel, stride, pad_start, pad_end, padType,
                         InferenceEngine::PoolingLayer::PoolType::MAX);
-        mPorts[operation.outputs[0]] = handleFusion(out, PARAM_I32(fusion_index));
+        mPorts[operation.outputs[0]] = handleFusion(out, PARAM_I32(fusion_index), mCreateNgraph);
 
         return true;
     } else if (device.compare("GNA")){

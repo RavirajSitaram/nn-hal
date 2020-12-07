@@ -15,41 +15,27 @@
  */
 
 #include "common.h"
+#include "Tanh.h"
 
 namespace android {
 namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
-namespace logistic{
+namespace tanh{
 
 bool validate(const Operation& operation, const Model& model){
-    const auto& input0 = model.operands[operation.inputs[0]];
-    const auto& output = model.operands[operation.outputs[0]];
-
-    if (input0.dimensions.size() > 4 || input0.type != OperandType::TENSOR_FLOAT32 ||
-        operation.outputs.size() > 1 || operation.inputs.size() > 1 ||
-        output.type != OperandType::TENSOR_FLOAT32) {
-        VLOG(L1, "NNERR: input/output  params invalid for Relu/Logit, aborting!!");
-        return false;
-    }
-
-    if (input0.dimensions[0] > 1) {
-        VLOG(L1, "NNERR:batch size more than 1 not supported for relu/logit");
-        return false;
-    }
     return true;
 }
 
 bool initialize(const std::string& device){
     if (device.compare("CPU")){
-        return false;
+    
     } else if (device.compare("GNA")){
-        return false;
+    
     } else {
         return false;
     }
 }
-
 
 }
 }  // namespace nnhal

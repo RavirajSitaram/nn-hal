@@ -15,6 +15,7 @@
  */
 
 #include "common.h"
+#include "Add.h"
 
 namespace android {
 namespace hardware {
@@ -50,7 +51,7 @@ bool validate(const Operation& operation, const Model& model){
     return true;
 }
 
-bool initialize(const std::string& device){
+bool initialize(const std::string& device, std::shared_ptr<CreateNgraph> &mCreateNgraph){
     if (device.compare("CPU")){
 
     VLOG(L1, "OperationType::ADD");
@@ -79,7 +80,7 @@ bool initialize(const std::string& device){
     // check fusion
     VLOG(L1, "check fusion parameter = %d\n", PARAM_I32(2));
 
-    mPorts[operation.outputs[0]] = handleFusion(out, PARAM_I32(2));
+    mPorts[operation.outputs[0]] = handleFusion(out, PARAM_I32(2), mCreateNgraph);
 
     VLOG(L1, "add mPorts[%d]->name %s + mPorts[%d]->name %s  = mPorts[%d]->name %s \n",
          operation.inputs[0],

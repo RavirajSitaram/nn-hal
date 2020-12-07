@@ -15,12 +15,13 @@
  */
 
 #include "common.h"
+#include "Relu6.h"
 
 namespace android {
 namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
-namespace relu1{
+namespace relu6{
 
 bool validate(const Operation& operation, const Model& model){
     const auto& input0 = model.operands[operation.inputs[0]];
@@ -42,7 +43,7 @@ bool validate(const Operation& operation, const Model& model){
 
 bool initialize(const std::string& device){
     if (device.compare("CPU")){
-        mPorts[operation.outputs[0]] = Clamp(getPort(operation.inputs[0]), -1, 1);
+        mPorts[operation.outputs[0]] = Clamp(getPort(operation.inputs[0]), -1, 6);
         return true;
     } else if (device.compare("GNA")){
         return false;

@@ -140,11 +140,11 @@ inline IRLayer Generic(const std::string &type, const OutputPort &src) {
     return layer;
 }
 
+inline OutputPort output(const IRLayer &src, int index = 0) { return src->outData[index]; }
+
 inline IRLayer Generic(const std::string &type, const IRLayer &src) {
     return Generic(type, output(src));
 }
-
-inline OutputPort output(const IRLayer &src, int index = 0) { return src->outData[index]; }
 
 inline IRLayer LayerOf(const OutputPort &src) { return src->getCreatorLayer().lock(); }
 
