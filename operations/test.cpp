@@ -20,7 +20,7 @@ namespace android {
 namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
-namespace add{
+namespace test{
 
 bool validate(const Operation& operation, const Model& model){
     return true;

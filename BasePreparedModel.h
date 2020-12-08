@@ -30,7 +30,7 @@
 #include "utils.h"
 #include "create_ngraph.hpp"
 #include "IENetwork.h"
-#include "ops.h"
+#include "operations/include/ops.h"
 
 using ::android::hardware::MQDescriptorSync;
 using ::android::hidl::memory::V1_0::IMemory;
@@ -51,6 +51,11 @@ auto microsecondsDuration(decltype(now()) end, decltype(now()) start) {
 };
 
 }
+
+template <class T>
+using vec = std::vector<T>;
+typedef uint8_t* memory;
+
 // The type and dimensions of an operand.
 struct Shape {
     OperandType type;
@@ -124,6 +129,7 @@ class BasePreparedModel : public V1_2::IPreparedModel{
             mCreateNgraph = std::make_shared<CreateNgraph>();
         }
         ~BasePreparedModel() override { deinitialize(); }
+        virtual bool initialize();
         static bool isOperationSupported(const Operation& operation, const Model& model);
         Return<ErrorStatus> execute(const Request& request,
                                 const sp<V1_0::IExecutionCallback>& callback) override;
@@ -152,6 +158,13 @@ class BasePreparedModel : public V1_2::IPreparedModel{
         virtual Blob::Ptr GetConstOperandAsTensor(int operand_index, int operation_idx);
         virtual Blob::Ptr GetInOutOperandAsBlob(RunTimeOperandInfo& op, const uint8_t* buf,
                                             uint32_t& len);
+        template <typename T_IExecutionCallback>
+        Return<ErrorStatus> executeBase(const Request& request, MeasureTiming measure,
+                                               const sp<T_IExecutionCallback>& callback);
+        template <typename T_IExecutionCallback>
+        void asyncExecute(const Request& request, MeasureTiming measure,
+                                 time_point driverStart,
+                                 const sp<T_IExecutionCallback>& callback);
         bool isConst(int index);
         OutputPort getPort(int index);
         void createNGraph();

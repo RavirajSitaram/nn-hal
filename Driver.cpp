@@ -20,6 +20,8 @@
 #include <android-base/logging.h>
 #include <thread>
 #include "BasePreparedModel.h"
+#include "CpuPreparedModel.h"
+#include "GnaPreparedModel.h"
 #include "ValidateHal.h"
 
 // sample gRPC client connection headers
@@ -202,10 +204,10 @@ static sp<BasePreparedModel> ModelFactory(const char* name, const Model& model) 
 
     if (strcmp(name, "CPU") == 0)
         driverPreparedModel = new CpuPreparedModel(model);
-    else if (strcmp(name, "VPU") == 0)
-        driverPreparedModel = new VpuPreparedModel(model);
-    else if (strcmp(name, "GPU") == 0)
-        driverPreparedModel = new GpuPreparedModel(model);
+    // else if (strcmp(name, "VPU") == 0)
+    //     driverPreparedModel = new VpuPreparedModel(model);
+    // else if (strcmp(name, "GPU") == 0)
+    //     driverPreparedModel = new GpuPreparedModel(model);
     else if (strcmp(name, "GNA") == 0)
         driverPreparedModel = new GnaPreparedModel(model);
     return driverPreparedModel;

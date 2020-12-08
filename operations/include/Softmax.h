@@ -22,7 +22,7 @@ namespace android {
 namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
-namespace add{
+namespace softmax{
 
 bool validate(const Operation& operation, const Model& model);
 bool initialize(const std::string& device);

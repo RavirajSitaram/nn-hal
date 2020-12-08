@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifndef UTILS_H
+#define UTILS_H
 
 #include <android-base/logging.h>
 #include <android/log.h>
@@ -61,7 +63,7 @@ enum PaddingScheme {
     kPaddingValid = 2,
 };
 
-unsigned int debugMask = ((1 << (L1 + 1)) - 1);
+inline unsigned int debugMask = ((1 << (L1 + 1)) - 1);
 
 #ifdef NN_DEBUG
 #define VLOG(l, x, ...)                                                          \
@@ -206,7 +208,7 @@ unsigned int debugMask = ((1 << (L1 + 1)) - 1);
 #define EXP_MASK_F32 0x7F800000U
 #define EXP_MASK_F16 0x7C00U
 
-unsigned short float2half(unsigned f) {
+inline unsigned short float2half(unsigned f) {
     unsigned f_exp, f_sig;
     unsigned short h_sgn, h_exp, h_sig;
 
@@ -319,7 +321,7 @@ unsigned short float2half(unsigned f) {
     return h_sgn + h_exp + h_sig;
 #endif
 }
-void floattofp16(short* dst, float* src, unsigned nelem) {
+inline void floattofp16(short* dst, float* src, unsigned nelem) {
     unsigned i;
     unsigned short* _dst = (unsigned short*)dst;
     unsigned* _src = (unsigned*)src;
@@ -333,10 +335,10 @@ void floattofp16(short* dst, float* src, unsigned nelem) {
 
 
 // small helper function to represent uint32_t value as float32
-float asfloat(uint32_t v) { return *reinterpret_cast<float*>(&v); }
+inline float asfloat(uint32_t v) { return *reinterpret_cast<float*>(&v); }
 
 // Function to convert F32 into F16
-float f16tof32(short x) {
+inline float f16tof32(short x) {
     // this is storage for output result
     uint32_t u = x;
 
@@ -379,7 +381,7 @@ float f16tof32(short x) {
 
 // This function convert f32 to f16 with rounding to nearest value to minimize error
 // the denormal values are converted to 0.
-short f32tof16(float x) {
+inline short f32tof16(float x) {
     // create minimal positive normal f16 value in f32 format
     // exp:-14,mantissa:0 -> 2^-14 * 1.0
     static float min16 = asfloat((127 - 14) << 23);
@@ -443,7 +445,7 @@ short f32tof16(float x) {
     return v.u | s;
 }
 
-void f16tof32Arrays(float* dst, const short* src, uint32_t& nelem, float scale = 1,
+inline void f16tof32Arrays(float* dst, const short* src, uint32_t& nelem, float scale = 1,
                     float bias = 0) {
     VLOG(L1, "convert f16tof32Arrays...\n");
     const short* _src = reinterpret_cast<const short*>(src);
@@ -453,7 +455,7 @@ void f16tof32Arrays(float* dst, const short* src, uint32_t& nelem, float scale =
     }
 }
 
-void f32tof16Arrays(short* dst, const float* src, uint32_t& nelem, float scale = 1,
+inline void f32tof16Arrays(short* dst, const float* src, uint32_t& nelem, float scale = 1,
                     float bias = 0) {
     VLOG(L1, "convert f32tof16Arrays...");
     for (uint32_t i = 0; i < nelem; i++) {
@@ -509,31 +511,6 @@ std::vector<T> GetConstVecFromBuffer(const uint8_t* buf, uint32_t len) {
     return ret;
 }
 
-int sizeOfData(OperandType type, std::vector<uint32_t> dims) {
-    int size;
-    switch (type) {
-        case OperandType::FLOAT32:
-            size = 4;
-            break;
-        case OperandType::TENSOR_FLOAT32:
-            size = 4;
-            break;
-        case OperandType::TENSOR_INT32:
-            size = 4;
-            break;
-        case OperandType::TENSOR_QUANT8_ASYMM:
-        case OperandType::INT32:
-            size = 1;
-            break;
-
-        default:
-            size = 0;
-    }
-    for (auto d : dims) size *= d;
-
-    return size;
-}
-
 #ifdef NN_DEBUG
 template <typename T>
 void printBuffer(int level, T* buf, int num, int items, const char* format, uint32_t buf_len) {
@@ -556,26 +533,6 @@ void printBuffer(int level, T* buf, int num, int items, const char* format, uint
     }
 }
 
-void printOperandbuf(int level, const uint8_t* buffer, const std::vector<uint32_t>& dims,
-                     uint32_t buffer_length, int limit = 0) {
-    auto dimsize = dims.size();
-    auto type = OperandType::TENSOR_FLOAT32;  // operand.type;
-    int size = 1;
-    for (int i = 0; i < dimsize; i++) size *= dims[i];
-
-    if (limit > 0 && limit < size) size = limit;
-
-    if (type == OperandType::TENSOR_FLOAT32) {
-        // float *buf = static_cast<float *>(operand.buffer);
-        printBuffer<float>(level, (float*)buffer, size, 10, "%f\t", buffer_length);
-    } else if (type == OperandType::TENSOR_INT32) {
-        // int32_t *buf = static_cast<int32_t *>(data_handle());
-        // printBuffer<int32_t>(level, buf, size, 10, "%d\t");
-    } else {
-        VLOG(level, "Do not support type %d", type);
-    }
-}
-
 #endif
 
 template <typename T>
@@ -588,3 +545,5 @@ T getOperandConstVal(const Model& model, const Operand& operand) {
 }  // namespace neuralnetworks
 }  // namespace hardware
 }  // namespace android
+
+#endif  // UTILS_H

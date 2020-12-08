@@ -46,6 +46,10 @@ void BasePreparedModel::deinitialize() {
     VLOG(L1, "free engine");
 }
 
+inline size_t getSizeFromInts(int lower, int higher) {
+    return (uint32_t)(lower) + ((uint64_t)(uint32_t)(higher) << 32);
+}
+
 // TODO: short term, make share memory mapping and updating a utility function.
 // TODO: long term, implement mmap_fd as a hidl IMemory service.
 bool RunTimePoolInfo::set(const hidl_memory& hidlMemory) {
@@ -111,10 +115,6 @@ bool setRunTimePoolInfosFromHidlMemories(std::vector<RunTimePoolInfo>* poolInfos
     return true;
 }
 
-inline size_t getSizeFromInts(int lower, int higher) {
-    return (uint32_t)(lower) + ((uint64_t)(uint32_t)(higher) << 32);
-}
-
 template <typename T>
 T getScalarData(const RunTimeOperandInfo& info) {
     // TODO: Check buffer is at least as long as size of data.
@@ -122,6 +122,30 @@ T getScalarData(const RunTimeOperandInfo& info) {
     return data[0];
 }
 
+inline int sizeOfData(OperandType type, std::vector<uint32_t> dims) {
+    int size;
+    switch (type) {
+        case OperandType::FLOAT32:
+            size = 4;
+            break;
+        case OperandType::TENSOR_FLOAT32:
+            size = 4;
+            break;
+        case OperandType::TENSOR_INT32:
+            size = 4;
+            break;
+        case OperandType::TENSOR_QUANT8_ASYMM:
+        case OperandType::INT32:
+            size = 1;
+            break;
+
+        default:
+            size = 0;
+    }
+    for (auto d : dims) size *= d;
+
+    return size;
+}
 
 // Updates the RunTimeOperandInfo with the newly calculated shape.
 // Allocate the buffer if we need to.
@@ -289,67 +313,67 @@ bool BasePreparedModel::isOperationSupported(const Operation& operation, const M
     switch (operation.type) {
 
         case OperationType::ADD: {
-            if(!add::validate())
+            if(!add::validate(operation, model))
                 return false;
         } break;  
         case OperationType::AVERAGE_POOL_2D: {
-            if(!avgpool::validate())
+            if(!avgpool::validate(operation, model))
                 return false;
         } break;  
-        case OperationType::AVERAGE_POOL_2D: {
-            if(!avgpool::validate())
+        case OperationType::FULLY_CONNECTED: {
+            if(!avgpool::validate(operation, model))
                 return false;
         } break;  
         case OperationType::MUL:{
-            if(!mul::validate())
+            if(!mul::validate(operation, model))
                 return false;
         } break;    
         case OperationType::MAX_POOL_2D: {
-            if(!maxpool::validate())
+            if(!maxpool::validate(operation, model))
                 return false;
         } break;
         case OperationType::CONCATENATION:{
-            if(!concat::validate())
+            if(!concat::validate(operation, model))
                 return false;
         } break;
         case OperationType::CONV_2D:{
-            if(!convolution::validate())
+            if(!convolution::validate(operation, model))
                 return false;
         } break;
         case OperationType::DEPTHWISE_CONV_2D:{
-            if(!depthconv::validate())
+            if(!depthconv::validate(operation, model))
                 return false;
         } break;
         case OperationType::L2_NORMALIZATION:{
-            if(!l2normalization::validate())
+            if(!l2normalization::validate(operation, model))
                 return false;
         } break;
         case OperationType::LOCAL_RESPONSE_NORMALIZATION:{
-            if(!lrn::validate())
+            if(!lrn::validate(operation, model))
                 return false;
         } break;
         case OperationType::RELU:{
-            if(!relu::validate())
+            if(!relu::validate(operation, model))
                 return false;
         } break;
         case OperationType::RELU1:{
-            if(!relu1::validate())
+            if(!relu1::validate(operation, model))
                 return false;
         } break;
         case OperationType::RELU6:{
-            if(!relu6::validate())
+            if(!relu6::validate(operation, model))
                 return false;
         } break;
         case OperationType::LOGISTIC:{
-            if(!logistic::validate())
+            if(!logistic::validate(operation, model))
                 return false;
         } break;
         case OperationType::SOFTMAX:{
-            if(!softmax::validate())
+            if(!softmax::validate(operation, model))
                 return false;
         } break;
         case OperationType::TANH:{
-            if(!softmax::validate())
+            if(!softmax::validate(operation, model))
                 return false;
         } break;
         default:
@@ -376,6 +400,11 @@ bool BasePreparedModel::isOperationSupported(const Operation& operation, const M
 
     VLOG(L1, "Operation %d supported by driver", operation.type);
 
+    return true;
+}
+
+bool BasePreparedModel::initialize() {
+    VLOG(L1, "initialize");
     return true;
 }
 
@@ -494,7 +523,7 @@ std::vector<T> BasePreparedModel::GetConstVecOperand(const Model& model, uint32_
     return GetConstVecFromBuffer<T>(buf, len);
 }
 
-bool isConst(int index) {
+bool BasePreparedModel::isConst(int index) {
     VLOG(L1, "---------------------------------------------");
     VLOG(L1, "Operand index: %d", index);
     const auto op = mModel.operands[index];
@@ -663,8 +692,8 @@ static Return<void> notify(const sp<V1_2::IExecutionCallback>& callback, const E
 }
 
 template <typename T_IExecutionCallback>
-Return<ErrorStatus> PreparedModel::executeBase(const Request& request, MeasureTiming measure,
-                                               const sp<V1_0::IExecutionCallback>& callback) {
+Return<ErrorStatus> BasePreparedModel::executeBase(const Request& request, MeasureTiming measure,
+                                               const sp<T_IExecutionCallback>& callback) {
     VLOG(L1, "executebase");
 
     time_point driverStart;
@@ -688,9 +717,10 @@ Return<ErrorStatus> PreparedModel::executeBase(const Request& request, MeasureTi
     return ErrorStatus::NONE;
 }
 
-void PreparedModel::asyncExecute(const Request& request, MeasureTiming measure,
+template <typename T_IExecutionCallback>
+void BasePreparedModel::asyncExecute(const Request& request, MeasureTiming measure,
                                  time_point driverStart,
-                                 const sp<V1_0::IExecutionCallback>& callback) {
+                                 const sp<T_IExecutionCallback>& callback) {
     std::vector<RunTimePoolInfo> requestPoolInfos;
     if (!setRunTimePoolInfosFromHidlMemories(&requestPoolInfos, request.pools)) {
         notify(callback, ErrorStatus::GENERAL_FAILURE, {}, kNoTiming);
@@ -802,7 +832,7 @@ void PreparedModel::asyncExecute(const Request& request, MeasureTiming measure,
     }
 }
 
-Return<void> PreparedModel::executeSynchronously(const Request& request, MeasureTiming measure,
+Return<void> BasePreparedModel::executeSynchronously(const Request& request, MeasureTiming measure,
                                                  executeSynchronously_cb cb) {
     VLOG(L1, "Begin to executeSynchronously");
     time_point driverStart, driverEnd, deviceStart, deviceEnd;
@@ -926,7 +956,7 @@ Return<void> PreparedModel::executeSynchronously(const Request& request, Measure
     return Void();
 }
 
-Return<void> PreparedModel::configureExecutionBurst(
+Return<void> BasePreparedModel::configureExecutionBurst(
     const sp<V1_2::IBurstCallback>& callback,
     const MQDescriptorSync<V1_2::FmqRequestDatum>& requestChannel,
     const MQDescriptorSync<V1_2::FmqResultDatum>& resultChannel, configureExecutionBurst_cb cb) {
@@ -936,16 +966,16 @@ Return<void> PreparedModel::configureExecutionBurst(
     return Void();
 }
 
-Return<ErrorStatus> PreparedModel::execute(const Request& request,
+Return<ErrorStatus> BasePreparedModel::execute(const Request& request,
                                            const sp<V1_0::IExecutionCallback>& callback) {
     VLOG(L1, "Begin to execute");
     return executeBase(request, MeasureTiming::NO, callback);
 }
 
-Return<ErrorStatus> PreparedModel::execute_1_2(const Request& request, MeasureTiming measure,
+Return<ErrorStatus> BasePreparedModel::execute_1_2(const Request& request, MeasureTiming measure,
                                                const sp<V1_2::IExecutionCallback>& callback) {
     VLOG(L1, "Begin to execute_1_2");
-    return executeBase_1_2(request, measure, callback);
+    return executeBase(request, measure, callback);
 }
 
 IRBlob::Ptr BasePreparedModel::GetConstWeightsOperandAsTensor(uint32_t index) { return nullptr; }

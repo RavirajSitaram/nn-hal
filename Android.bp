@@ -9,11 +9,16 @@ cc_library_shared {
 
     srcs: [
         "Driver.cpp",
-        "PreparedModel.cpp",
+        "BasePreparedModel.cpp",
+        "operations/src/Relu.cpp"
     ],
 
     local_include_dirs: [
         "graphAPI",
+        "operations",
+        "operations/include",
+        "cpu",
+        "gna"
     ],
 
     include_dirs: [

@@ -52,7 +52,7 @@ bool initialize(const std::string& device){
     }
 }
 
-extern const std::string ReLU = "ReLU";
+// extern const std::string ReLU = "ReLU";
 
 static IRLayer create(const OutputPort &src, const std::string &type) {
     std::string name = type + "-";  // todo: make it unique

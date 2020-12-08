@@ -27,7 +27,7 @@
 #include <string>
 
 #include "BasePreparedModel.h"
-#include "operations/include/ops.h"
+// #include "operations/include/ops.h"
 
 using namespace InferenceEngine;
 
@@ -47,6 +47,8 @@ public:
     virtual Blob::Ptr GetConstOperandAsTensor(int operand_index, int operation_idx) override;
     virtual Blob::Ptr GetInOutOperandAsBlob(RunTimeOperandInfo& op, const uint8_t* buf,
                                             uint32_t& len) override;
+protected:
+    void deinitialize();
 };
 
 }  // namespace nnhal

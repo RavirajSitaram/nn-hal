@@ -16,6 +16,13 @@ namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
 
+void CpuPreparedModel::deinitialize() {
+    VLOG(L1, "deinitialize");
+    delete enginePtr;
+    enginePtr = nullptr;
+    VLOG(L1, "free engine");
+}
+
 bool CpuPreparedModel::initialize() {
     VLOG(L1, "initialize");
     bool success = false;

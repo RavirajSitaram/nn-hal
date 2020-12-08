@@ -26,7 +26,7 @@
 #include "IRLayers.h"
 #include "Driver.h"
 #include "create_ngraph.hpp"
-#include "include/Relu.h"
+#include "Relu.h"
 
 namespace android {
 namespace hardware {
@@ -50,7 +50,8 @@ inline OutputPort Clamp(const OutputPort &src, float min, float max) {
     return output(layer);
 }
 
-OutputPort handleFusion(const OutputPort& out, int32_t fusedOp, CreateNgraph& mCreateNgraph) {
+template<class T>
+OutputPort handleFusion(const OutputPort& out, int32_t fusedOp, std::shared_ptr<T>& mCreateNgraph) {
     VLOG(L1, "fusedOp: %d", fusedOp);
     OutputPort ret = out;
     if (fusedOp == (int32_t)FusedActivationFunc::RELU) {
@@ -71,7 +72,7 @@ OutputPort handleFusion(const OutputPort& out, int32_t fusedOp, CreateNgraph& mC
     return ret;
 }
 
-void calculateExplicitPadding(int32_t in_size, int32_t stride, int32_t filter_size,
+inline void calculateExplicitPadding(int32_t in_size, int32_t stride, int32_t filter_size,
                               int32_t padding_implicit, int32_t* padding_head,
                               int32_t* padding_tail) {
     *padding_head = 0;
