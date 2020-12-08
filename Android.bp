@@ -9,15 +9,11 @@ cc_library_shared {
 
     srcs: [
         "Driver.cpp",
-        "BasePreparedModel.cpp",
+        "PreparedModel.cpp",
     ],
 
     local_include_dirs: [
         "graphAPI",
-        "cpu",
-        "gna",
-        "operations",
-        "operations/include"
     ],
 
     include_dirs: [
@@ -107,6 +103,45 @@ cc_library_shared {
         "libneuralnetworks_common",
     ],
 
+    generated_headers: [
+        "HelloworldProtoStub_h",
+    ],
+    generated_sources: [
+        "HelloworldProtoStub_cc",
+    ],
+
+}
+
+genrule {
+    name: "HelloworldProtoStub_h",
+    tools: [
+        "aprotoc",
+        "protoc-gen-grpc-cpp-plugin",
+    ],
+    cmd: "$(location aprotoc) -I$$(dirname $(in)) -Iexternal/protobuf/src --plugin=protoc-gen-grpc=$(location protoc-gen-grpc-cpp-plugin) $(in) --grpc_out=$(genDir) --cpp_out=$(genDir)",
+    srcs: [
+        "proto/helloworld.proto",
+    ],
+    out: [
+        "helloworld.pb.h",
+        "helloworld.grpc.pb.h",
+    ],
+}
+
+genrule {
+    name: "HelloworldProtoStub_cc",
+    tools: [
+        "aprotoc",
+        "protoc-gen-grpc-cpp-plugin",
+    ],
+    cmd: "$(location aprotoc) -I$$(dirname $(in)) -Iexternal/protobuf/src --plugin=protoc-gen-grpc=$(location protoc-gen-grpc-cpp-plugin) $(in) --grpc_out=$(genDir) --cpp_out=$(genDir)",
+    srcs: [
+        "proto/helloworld.proto",
+    ],
+    out: [
+        "helloworld.pb.cc",
+        "helloworld.grpc.pb.cc",
+    ],
 }
 
 //##############################################################

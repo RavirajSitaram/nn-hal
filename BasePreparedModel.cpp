@@ -19,7 +19,7 @@
 #include <android/log.h>
 #include <log/log.h>
 #include <fstream>
-
+#include <thread>
 #include "ValidateHal.h"
 
 #include <cutils/properties.h>
@@ -36,14 +36,6 @@ namespace neuralnetworks {
 namespace nnhal {
 
 using namespace android::nn;
-
-using time_point = std::chrono::steady_clock::time_point;
-
-auto now() { return std::chrono::steady_clock::now(); };
-
-auto microsecondsDuration(decltype(now()) end, decltype(now()) start) {
-    return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-};
 
 static const Timing kNoTiming = {.timeOnDevice = UINT64_MAX, .timeInDriver = UINT64_MAX};
 

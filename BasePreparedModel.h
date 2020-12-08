@@ -42,10 +42,15 @@ namespace neuralnetworks {
 namespace nnhal {
 namespace {
 
-template <class T>
-using vec = std::vector<T>;
-typedef uint8_t* memory;
+using time_point = std::chrono::steady_clock::time_point;
 
+auto now() { return std::chrono::steady_clock::now(); };
+
+auto microsecondsDuration(decltype(now()) end, decltype(now()) start) {
+    return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+};
+
+}
 // The type and dimensions of an operand.
 struct Shape {
     OperandType type;
