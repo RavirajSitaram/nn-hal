@@ -14,14 +14,16 @@
  * limitations under the License.
  */
 
-#include "common.h"
 #include "Add.h"
+#include "CpuPreparedModel.h"
 
 namespace android {
 namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
 namespace add{
+
+OutputPort addDataPtr;
 
 bool validate(const Operation& operation, const Model& model){
     const auto& input0 = model.operands[operation.inputs[OP_INPUT0_IDX_ADD]];
@@ -51,13 +53,14 @@ bool validate(const Operation& operation, const Model& model){
     return true;
 }
 
-bool initialize(const std::string& device, std::shared_ptr<CreateNgraph> &mCreateNgraph){
+bool initialize(const std::string& device, const Operation& operation, const Model& model){
     if (device.compare("CPU")){
 
     VLOG(L1, "OperationType::ADD");
     OutputPort out;
-    bool isIn0Const = isConst(operation.inputs[OP_INPUT_IDX_CONV]);
-    bool isIn1Const = isConst(operation.inputs[OP_FILTER_IDX_CONV]);
+    sp<CpuPreparedModel> PreparedModelObj;
+    bool isIn0Const = PreparedModelObj->isConst(operation.inputs[OP_INPUT_IDX_CONV]);
+    bool isIn1Const = PreparedModelObj->isConst(operation.inputs[OP_FILTER_IDX_CONV]);
     VLOG(L1, "isIn0Const = %d isIn1Const = %d \n", isIn0Const, isIn1Const);
     if (isIn0Const || isIn1Const) {
         if (isIn0Const && isIn1Const) {
@@ -67,27 +70,20 @@ bool initialize(const std::string& device, std::shared_ptr<CreateNgraph> &mCreat
         // this will use ScaleShift
         if (isIn0Const)  // if op.inputs[OP_FILTER_IDX] is a Model input
             out = AddConst(
-                mNet, getPort(operation.inputs[OP_FILTER_IDX_CONV]),
-                GetConstOperandAsTensor(operation.inputs[OP_INPUT_IDX_CONV], OP_INPUT_IDX_CONV));
+                PreparedModelObj->mNet, PreparedModelObj->getPort(operation.inputs[OP_FILTER_IDX_CONV]),
+                PreparedModelObj->GetConstOperandAsTensor(operation.inputs[OP_INPUT_IDX_CONV], OP_INPUT_IDX_CONV));
         else  // isIn1Const is const //op.inputs[OP_INPUT_IDX_CONV] is a Model input
             out = AddConst(
-                mNet, getPort(operation.inputs[OP_INPUT_IDX_CONV]),
-                GetConstOperandAsTensor(operation.inputs[OP_FILTER_IDX_CONV], OP_FILTER_IDX_CONV));
+                PreparedModelObj->mNet, PreparedModelObj->getPort(operation.inputs[OP_INPUT_IDX_CONV]),
+                PreparedModelObj->GetConstOperandAsTensor(operation.inputs[OP_FILTER_IDX_CONV], OP_FILTER_IDX_CONV));
     } else {  // both inputs[OP_INPUT_IDX_CONV] & inputs[OP_FILTER_IDX_CONV] aremodel inputs
-        out = getPort(operation.inputs[OP_INPUT_IDX_CONV]) +
-              getPort(operation.inputs[OP_FILTER_IDX_CONV]);
+        out = PreparedModelObj->getPort(operation.inputs[OP_INPUT_IDX_CONV]) +
+              PreparedModelObj->getPort(operation.inputs[OP_FILTER_IDX_CONV]);
     }
     // check fusion
-    VLOG(L1, "check fusion parameter = %d\n", PARAM_I32(2));
+    VLOG(L1, "check fusion parameter = %d\n",PreparedModelObj->ParseOperationInput<int32_t>(model, operation, 2));
 
-    mPorts[operation.outputs[0]] = handleFusion(out, PARAM_I32(2), mCreateNgraph);
-
-    VLOG(L1, "add mPorts[%d]->name %s + mPorts[%d]->name %s  = mPorts[%d]->name %s \n",
-         operation.inputs[0],
-         isIn0Const ? "isIn0Const" : mPorts[operation.inputs[0]]->getName().c_str(),
-         operation.inputs[1],
-         isIn1Const ? "isIn1Const" : mPorts[operation.inputs[1]]->getName().c_str(),
-         operation.outputs[0], mPorts[operation.outputs[0]]->getName().c_str());
+    addDataPtr = handleFusion(out, PreparedModelObj->ParseOperationInput<int32_t>(model, operation, 2));
 
     return true;
     
@@ -96,6 +92,10 @@ bool initialize(const std::string& device, std::shared_ptr<CreateNgraph> &mCreat
     } else {
         return false;
     }
+}
+
+OutputPort updateDataPtr() {
+    return addDataPtr;
 }
 
 }

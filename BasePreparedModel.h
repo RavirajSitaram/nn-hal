@@ -30,7 +30,13 @@
 #include "utils.h"
 #include "create_ngraph.hpp"
 #include "IENetwork.h"
-#include "operations/include/ops.h"
+
+
+// #define PARAM_I32(i) ParseOperationInput<int32_t>(mModel, operation, i)
+// #define PARAM_FP(i) ParseOperationInput<float>(mModel, operation, i)
+
+#define PARAM_I32(mModel, operation, i) ParseOperationInput<int32_t>(mModel, operation, i)
+#define PARAM_FP(i) ParseOperationInput<float>(mModel, operation, i)
 
 using ::android::hardware::MQDescriptorSync;
 using ::android::hidl::memory::V1_0::IMemory;
@@ -99,15 +105,14 @@ struct RunTimePoolInfo {
 bool setRunTimePoolInfosFromHidlMemories(std::vector<RunTimePoolInfo>* poolInfos,
                                          const hidl_vec<hidl_memory>& pools);
 
-template <typename T_IExecutionCallback>;
+// template <typename T_IExecutionCallback>;
 class BasePreparedModel : public V1_2::IPreparedModel{
     public:
         BasePreparedModel(const Model& model)
         : mTargetDevice("CPU"),
           mModel(model),
           mNet("nnNet"),
-          enginePtr(nullptr),
-          mPadreq(EXPL_PAD) {
+          enginePtr(nullptr){
             g_layer_precision = InferenceEngine::Precision::FP16;
             mUseNgraph =
                 isNgraphPropSet();  // TODO:Should additionally check if all the ops are supported
@@ -117,8 +122,7 @@ class BasePreparedModel : public V1_2::IPreparedModel{
         : mTargetDevice(device),
           mModel(model),
           mNet("nnNet"),
-          enginePtr(nullptr),
-          mPadreq(EXPL_PAD) {
+          enginePtr(nullptr) {
             if (mTargetDevice == "CPU" || mTargetDevice == "GPU")
                 g_layer_precision = InferenceEngine::Precision::FP32;
             else if (mTargetDevice == "MYRIAD")
@@ -142,17 +146,30 @@ class BasePreparedModel : public V1_2::IPreparedModel{
             const MQDescriptorSync<V1_2::FmqRequestDatum>& requestChannel,
             const MQDescriptorSync<V1_2::FmqResultDatum>& resultChannel,
             configureExecutionBurst_cb cb) override;
+        OutputPort getPort(int index);
+
+        template <typename T>
+        T ParseOperationInput(const Model& model, const Operation& operation, uint32_t index);
+
+        bool isConst(int index);
+
+        template <typename T>
+        std::vector<T> GetConstVecOperand(const Model& model, uint32_t index); //for reshape
+        
+        IRDocument mNet; //public for add operation
+        std::shared_ptr<CreateNgraph> mCreateNgraph; //for operations
     protected:
         void deinitialize();
         bool initializeRunTimeOperandInfo();
         void initializeInput();
         bool finalizeOutput();
         template <typename T>
-        T ParseOperationInput(const Model& model, const Operation& operation, uint32_t index);
-        template <typename T>
         T GetConstOperand(const Model& model, uint32_t index);
+        
         template <typename T>
-        std::vector<T> GetConstVecOperand(const Model& model, uint32_t index);
+        T GetConstFromBuffer(const uint8_t* buf, uint32_t len);
+        template <typename T>
+        std::vector<T> GetConstVecFromBuffer(const uint8_t* buf, uint32_t len);
         const uint8_t* GetOperandMemory(const Model& model, uint32_t index, uint32_t& len_out);
         virtual Blob::Ptr GetConstWeightsOperandAsTensor(uint32_t index);
         virtual Blob::Ptr GetConstOperandAsTensor(int operand_index, int operation_idx);
@@ -165,20 +182,15 @@ class BasePreparedModel : public V1_2::IPreparedModel{
         void asyncExecute(const Request& request, MeasureTiming measure,
                                  time_point driverStart,
                                  const sp<T_IExecutionCallback>& callback);
-        bool isConst(int index);
-        OutputPort getPort(int index);
-        void createNGraph();
+        // OutputPort getPort(int index);
 
         std::string mTargetDevice;
         Model mModel;
         std::vector<RunTimeOperandInfo> mOperands;
         std::vector<RunTimePoolInfo> mPoolInfos;
-        IRDocument mNet;
         std::vector<OutputPort> mPorts;  // typedef std::shared_ptr<Data> DataPtr;
         ExecuteNetwork* enginePtr;
-        uint32_t mPadreq;
-        std::shared_ptr<CreateNgraph> mCreateNgraph;
-        std::shared_ptr<CreateNgraph>* mCreateNgraphPtr = &mCreateNgraph;
+        
         bool mUseNgraph;
 };
 

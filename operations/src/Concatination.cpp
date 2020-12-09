@@ -14,54 +14,16 @@
  * limitations under the License.
  */
 
-#include "common.h"
 #include "Concatination.h"
+#include "CpuPreparedModel.h"
 
 namespace android {
 namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
 namespace concat{
-    bool validate(const Operation& operation, const Model& model){
-        return true;
-    }
 
-    bool initialize(const std::string& device){
-        if (device.compare("CPU")){
-            VLOG(L1, "OperationType::CONCATENATION");
-            uint32_t axis;
-            auto n = operation.inputs.size() - 1;
-            std::vector<OutputPort> inputs;
-            const auto op = mModel.operands[operation.inputs[0]];
-            auto input = getPort(operation.inputs[0]);
-            auto inDims = input->getTensorDesc().getDims();
-            if (op.dimensions.size() == 4) {
-                std::vector<uint32_t> axisMap = {2, 3, 1};  // NCHW = axisMap[NHWC]
-                axis = axisMap[PARAM_I32(n)];
-            } else if (op.dimensions.size() == 3) {
-                std::vector<uint32_t> axisMap = {2, 3, 1};  // NCHW = axisMap[HWC]
-                axis = axisMap[PARAM_I32(n)];
-            }
-            VLOG(L1, "shape of output tensor axis %d inDims size %d, op_dimensionsize %d", axis,
-                inDims.size(), op.dimensions.size());
-
-            for (int i = 0; i < n; i++) inputs.push_back(getPort(operation.inputs[i]));
-            auto out = Concat(inputs, axis);
-            std::vector<std::string> inputNames;
-            for (int i = 0; i < inputs.size(); ++i) {
-                inputNames.push_back(inputs[i]->getName());
-            }
-            mCreateNgraph->addConcat(out->getName(), inputNames, axis);
-
-            return true;
-        } else if (device.compare("GNA")){
-            return false;
-        } else {
-            return false;
-        }
-    }
-
-    inline OutputPort createGraph(const std::vector<OutputPort> inputs, int axis = 1){
+    inline OutputPort Concat(const std::vector<OutputPort> inputs, int axis = 1){
         std::string name = "Concat-";  // todo: make it unique
         name = name << layer_name_count++;
         InferenceEngine::LayerParams prm;
@@ -82,6 +44,47 @@ namespace concat{
         outDim[axis] = axisSize;
         return addOutput(ret, outDim);
     }
+    
+    bool validate(const Operation& operation, const Model& model){
+        return true;
+    }
+
+    bool initialize(const std::string& device, const Operation& operation, const Model& model){
+        if (device.compare("CPU")){
+            VLOG(L1, "OperationType::CONCATENATION");
+            uint32_t axis;
+            auto n = operation.inputs.size() - 1;
+            std::vector<OutputPort> inputs;
+            const auto op = model.operands[operation.inputs[0]];
+            sp<CpuPreparedModel> PreparedModelObj;
+            auto input = PreparedModelObj->getPort(operation.inputs[0]);
+            auto inDims = input->getTensorDesc().getDims();
+            if (op.dimensions.size() == 4) {
+                std::vector<uint32_t> axisMap = {2, 3, 1};  // NCHW = axisMap[NHWC]
+                axis = axisMap[PreparedModelObj->ParseOperationInput<int32_t>(model, operation, n)];
+            } else if (op.dimensions.size() == 3) {
+                std::vector<uint32_t> axisMap = {2, 3, 1};  // NCHW = axisMap[HWC]
+                axis = axisMap[PreparedModelObj->ParseOperationInput<int32_t>(model, operation, n)];
+            }
+            VLOG(L1, "shape of output tensor axis %d inDims size %d, op_dimensionsize %d", axis,
+                inDims.size(), op.dimensions.size());
+
+            for (int i = 0; i < n; i++) inputs.push_back(PreparedModelObj->getPort(operation.inputs[i]));
+            auto out = Concat(inputs, axis);
+            std::vector<std::string> inputNames;
+            for (int i = 0; i < inputs.size(); ++i) {
+                inputNames.push_back(inputs[i]->getName());
+            }
+            PreparedModelObj->mCreateNgraph->addConcat(out->getName(), inputNames, axis);
+
+            return true;
+        } else if (device.compare("GNA")){
+            return false;
+        } else {
+            return false;
+        }
+    }
+
 }
 }  // namespace nnhal
 }  // namespace neuralnetworks

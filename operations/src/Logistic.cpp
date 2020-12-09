@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "common.h"
 #include "Logistic.h"
 
 namespace android {
@@ -41,7 +40,7 @@ bool validate(const Operation& operation, const Model& model){
     return true;
 }
 
-bool initialize(const std::string& device){
+bool initialize(const std::string& device, const Operation& operation, const Model& model){
     if (device.compare("CPU")){
         return false;
     } else if (device.compare("GNA")){

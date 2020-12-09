@@ -17,6 +17,7 @@
 #define LOG_TAG "Driver"
 
 #include "Driver.h"
+
 #include <android-base/logging.h>
 #include <thread>
 #include "BasePreparedModel.h"

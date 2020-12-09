@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "common.h"
 #include "LocalResponseNormalization.h"
+#include "CpuPreparedModel.h"
 
 namespace android {
 namespace hardware {
@@ -23,27 +23,7 @@ namespace neuralnetworks {
 namespace nnhal {
 namespace lrn{
 
-bool validate(const Operation& operation, const Model& model){
-    return true;
-}
-
-bool initialize(const std::string& device){
-    if (device.compare("CPU")){
-
-        VLOG(L1, "OperationType::LOCAL_RESPONSE_NORMALIZATION");
-
-        float alpha = PARAM_FP(3);
-        float beta = PARAM_FP(4);
-        int size = PARAM_I32(1);
-        float k = PARAM_FP(2);
-        mPorts[operation.outputs[0]] = LRN(getPort(operation.inputs[0]), alpha, beta, size, false, k);
-        return true;
-    } else if (device.compare("GNA")){
-        return false;
-    } else {
-        return false;
-    }
-}
+OutputPort lrnDataPtr;
 
 inline OutputPort LRN(const OutputPort &src, float alpha, float beta, int local_size,
                       bool isAcross = true, float k = 1) {
@@ -63,6 +43,33 @@ inline OutputPort LRN(const OutputPort &src, float alpha, float beta, int local_
     l->_size = local_size;
     l->_k = (unsigned int)k;
     return addOutput(l, inp->getTensorDesc().getDims());
+}
+
+bool validate(const Operation& operation, const Model& model){
+    return true;
+}
+
+bool initialize(const std::string& device, const Operation& operation, const Model& model){
+    if (device.compare("CPU")){
+
+        VLOG(L1, "OperationType::LOCAL_RESPONSE_NORMALIZATION");
+        sp<CpuPreparedModel> PreparedModelObj;
+
+        float alpha = PreparedModelObj->ParseOperationInput<float>(model, operation, 3);
+        float beta = PreparedModelObj->ParseOperationInput<float>(model, operation, 4);
+        int size = PreparedModelObj->ParseOperationInput<int32_t>(model, operation, 1);
+        float k = PreparedModelObj->ParseOperationInput<float>(model, operation, 2);
+        lrnDataPtr = LRN(PreparedModelObj->getPort(operation.inputs[0]), alpha, beta, size, false, k);
+        return true;
+    } else if (device.compare("GNA")){
+        return false;
+    } else {
+        return false;
+    }
+}
+
+OutputPort updateDataPtr() {
+    return lrnDataPtr;
 }
 
 }

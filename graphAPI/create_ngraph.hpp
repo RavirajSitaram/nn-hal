@@ -11,7 +11,9 @@
 #define LOG_TAG "CreateNgraph"
 #include <android/log.h>
 #include <log/log.h>
-#include "operations/include/common.h"
+#include "utils.h"
+// #include "operations/include/common.h"
+
 #define LOGDIMS(d, header)                                                           \
     do {                                                                             \
         auto size = (d).size();                                                      \
@@ -24,20 +26,6 @@ namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
 class CreateNgraph {
-    
-struct GenConvParams {
-    int groups = 1;
-    std::vector<float> weightsBuf;
-    std::vector<size_t> weightsDims;
-    std::vector<float> biasesBuf;
-    std::vector<size_t> biasesDims;
-    size_t weightsSize;
-    std::vector<size_t> strides;
-    std::vector<std::ptrdiff_t> pads_begin;
-    std::vector<std::ptrdiff_t> pads_end;
-    std::vector<size_t> dilations;
-    const char *pad_type;
-};
 
 private:
     std::map<std::string, std::shared_ptr<ngraph::Node>> mNodes;

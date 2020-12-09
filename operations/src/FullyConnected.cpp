@@ -14,14 +14,75 @@
  * limitations under the License.
  */
 
-#include "common.h"
 #include "FullyConnected.h"
+#include "CpuPreparedModel.h"
+#include "Reshape.h"
 
 namespace android {
 namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
 namespace fullyconnected{
+
+    OutputPort fcDataPtr;
+inline static IRLayer create(const IRBlob::Ptr &weights, const OutputPort &src) {
+#ifdef NNLOG
+    ALOGI("Create FC layer");
+#endif
+    std::string name = "FC-";  // todo: make it unique
+    name = name << layer_name_count++;
+    InferenceEngine::LayerParams prm;
+    prm.precision = g_layer_precision;
+    prm.name = name;
+
+    auto inDims = src->getTensorDesc().getDims();  // (batch, IFM)
+
+    auto wDim = weights->getTensorDesc().getDims();
+
+    IR_ASSERT(inDims.size() == 2);
+
+    unsigned int ofm = 0;
+    if (wDim.size() == 2) {
+#ifdef NNLOG
+        ALOGI("inDims[0] = %d inDims[1] = %d", inDims[0], inDims[1]);
+        ALOGI("wDim[0] = %d wDim[1] = %d", wDim[0], wDim[1]);
+#endif
+
+        IR_ASSERT(inDims[1] == wDim[1]);           // Weights: (Out,In)
+        ofm = static_cast<unsigned int>(wDim[0]);  // Out
+    } else if (wDim.size() == 1)                   // linear, just a blob, line in IR
+    {
+        ofm = static_cast<unsigned int>(weights->size() / inDims[1]);
+        IR_ASSERT(inDims[1] * ofm == weights->size());  // should be divided properly
+    } else
+        THROW_IE_EXCEPTION << "expecting weights for FC only as 1 dim (blob) or 2 dim (Matrix)";
+
+    auto fc = std::make_shared<InferenceEngine::FullyConnectedLayer>(prm);
+    fc->type = "FullyConnected";
+
+    fc->_out_num = ofm;
+    addAttr(fc, "out-size ", ofm);  // aks added
+    // todo: assert that input should be cols
+    addOutput(fc, {inDims[0], static_cast<uint32_t>(fc->_out_num)});
+    src >> fc;
+    fc->_weights = weights;
+    fc->blobs["weights"] = weights;  // todo: have setter for those layers...
+    return fc;
+}
+
+
+
+inline InferenceEngine::CNNLayer::Ptr operator*(const IRBlob::Ptr &weights, const IRLayer &b) {
+    std::cout << "FCLayer::create operator*(const IRBlob::Ptr &weights, const IRLayer &b)"
+              << std::endl;
+    return create(weights, output(b));
+}
+
+inline OutputPort operator*(const IRBlob::Ptr &weights, const OutputPort &op) {
+    std::cout << "FCLayer::create operator*(const IRBlob::Ptr &weights, const OutputPort &op)"
+              << std::endl;
+    return output(create(weights, op));
+}
 
     bool validate(const Operation& operation, const Model& model){
         const auto& input0 = model.operands[operation.inputs[OP_INPUT_IDX_FC]];
@@ -70,15 +131,16 @@ namespace fullyconnected{
         return true;
     }
 
-    bool initialize(const std::string& device, std::shared_ptr<CreateNgraph> &mCreateNgraph){
+    bool initialize(const std::string& device, const Operation& operation,  const Model& model){
         if (device.compare("CPU")){
             VLOG(L1, "OperationType::FULLY_CONNECTED");
             dumpOperationParam(operation);
+            sp<CpuPreparedModel> PreparedModelObj;
 
-            auto input = getPort(operation.inputs[OP_INPUT_IDX_CONV]);
+            auto input = PreparedModelObj->getPort(operation.inputs[OP_INPUT_IDX_CONV]);
             auto weights =
-                GetConstOperandAsTensor(operation.inputs[OP_FILTER_IDX_CONV], OP_FILTER_IDX_CONV);
-            auto bias = GetConstOperandAsTensor(operation.inputs[OP_BIAS_IDX_CONV], OP_BIAS_IDX_CONV);
+                PreparedModelObj->GetConstOperandAsTensor(operation.inputs[OP_FILTER_IDX_CONV], OP_FILTER_IDX_CONV);
+            auto bias = PreparedModelObj->GetConstOperandAsTensor(operation.inputs[OP_BIAS_IDX_CONV], OP_BIAS_IDX_CONV);
 
             auto inputDims = input->getTensorDesc().getDims();
             for (auto i = 0; i < inputDims.size(); i++) VLOG(L1, "input dims[%d] = %d ", i, inputDims[i]);
@@ -91,7 +153,7 @@ namespace fullyconnected{
 
             nnAssert(inputDims.size() >= 2);
             nnAssert(weightsDims.size() == 2);
-            uint32_t numInputElements = sizeOf(inputDims);
+            uint32_t numInputElements = sizeOfTensor(inputDims);
             uint32_t num_units = weightsDims[0];
             uint32_t input_size = weightsDims[1];
             uint32_t batch_size = numInputElements / input_size;
@@ -128,14 +190,15 @@ namespace fullyconnected{
                         strechDim, outDims[strechDim]);
                 }
 
-                input = Reshape(outDims, input);
+                input = reshape::Reshape(outDims, input);
             }
 
             const auto newInputDims = input->getTensorDesc().getDims();
 
             auto out = weights * input + bias;
 
-            mPorts[operation.outputs[0]] = handleFusion(out, PARAM_I32(3), mCreateNgraph);
+            // mPorts[operation.outputs[0]] = handleFusion(out, PARAM_I32(3));
+            fcDataPtr = handleFusion(out, PreparedModelObj->ParseOperationInput<int32_t>(model, operation, 3));
 
             VLOG(L1, "----------------------------------------------");
             VLOGDIMS(L1, inputDims, "inputs dims");
@@ -148,73 +211,16 @@ namespace fullyconnected{
         } else if (device.compare("GNA")){
             VLOG(L1, "OperationType::FULLY_CONNECTED");
 
-            auto getOperandLifeTime = [&](uint32_t idx) {
-                const auto op = mModel.operands[idx];
-                return (int)op.lifetime;
-            };
-
-            auto getIRBlobFromOperand = [&](uint32_t idx, uint32_t offset) {
-                const auto op = mModel.operands[idx];
-
-                auto blob = GetConstOperandAsTensor(idx, offset);
-                if (op.lifetime == OperandLifeTime::MODEL_INPUT)
-                {
-                    mOpIndex2BlobMap[idx] = blob;
-                    VLOG(L1, "blob idx=%d (model_input) ptr=%p", idx, blob.get());
-                }
-
-                return blob;
-            };
-
-            IRBuilder::BuilderFCLayer::FCParams params;
-            auto input = getIRBlobFromOperand(operation.inputs[0], 0);
-
-            params.weights.data = getIRBlobFromOperand(operation.inputs[1], 1);
-            params.weights.lifeTime = getOperandLifeTime(operation.inputs[1]);
-
-            params.bias.data = getIRBlobFromOperand(operation.inputs[2], 2);
-            params.bias.lifeTime = getOperandLifeTime(operation.inputs[2]);
-
-            auto inputDims = input->getTensorDesc().getDims();
-            for (auto i = 0; i < inputDims.size(); i++) VLOG(L1, "input dims[%d] = %d ", i, inputDims[i]);
-
-            auto weightsDims = params.weights.data->getTensorDesc().getDims();
-            for (auto i = 0; i < weightsDims.size(); i++)
-                VLOG(L1, "weights dims[%d] = %d ", i, weightsDims[i]);
-
-            auto biasDims = params.bias.data->getTensorDesc().getDims();
-
-            nnAssert(inputDims.size() >= 2);
-            nnAssert(weightsDims.size() == 2);
-            uint32_t numInputElements = sizeOfTensor(inputDims);
-            uint32_t num_units = weightsDims[0];
-            uint32_t input_size = weightsDims[1];
-            uint32_t batch_size = numInputElements / input_size;
-            nnAssert(biasDims[0] == num_units);
-            nnAssert(input_size * batch_size == numInputElements);
-
-            const auto newInputDims = input->getTensorDesc().getDims();
-
-
-            if (mBuilderModel == nullptr) {
-                VLOG(L1, "mBuilder = nullptr !!!");
-                // ASSERT
-            }
-
-            mPorts[operation.outputs[0]] = mBuilderModel->createFC(params, input);
-
-            VLOG(L1, "----------------------------------------------");
-            VLOGDIMS(L1, inputDims, "inputs dims");
-            VLOGDIMS(L1, newInputDims, "newInput dims");
-            VLOGDIMS(L1, weightsDims, "weights dims");
-            VLOG(L1, "----------------------------------------------");
-
             return true;
 
         } else {
             return false;
         }
     }
+
+    OutputPort updateDataPtr() {
+    return fcDataPtr;
+}
 
     bool createGraph(){
         return true;

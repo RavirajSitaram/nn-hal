@@ -14,14 +14,33 @@
  * limitations under the License.
  */
 
-#include "common.h"
 #include "Relu6.h"
+#include "CpuPreparedModel.h"
 
 namespace android {
 namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
 namespace relu6{
+
+OutputPort relu6DataPtr;
+
+inline OutputPort Clamp(const OutputPort &src, float min, float max) {
+    std::string name = "Clamp-";  // todo: make it unique
+    name = name << layer_name_count++;
+    InferenceEngine::LayerParams prms;
+    prms.precision = g_layer_precision;
+    prms.name = name;
+    auto layer = std::make_shared<InferenceEngine::ClampLayer>(prms);
+    layer->type = "Clamp";
+    layer->min_value = min;
+    layer->max_value = max;
+    layer->params["max"] = std::to_string(layer->max_value);
+    layer->params["min"] = std::to_string(layer->min_value);
+    src >> layer;
+    addOutput(layer, src->getTensorDesc().getDims());
+    return output(layer);
+}
 
 bool validate(const Operation& operation, const Model& model){
     const auto& input0 = model.operands[operation.inputs[0]];
@@ -41,9 +60,10 @@ bool validate(const Operation& operation, const Model& model){
     return true;
 }
 
-bool initialize(const std::string& device){
+bool initialize(const std::string& device, const Operation& operation, const Model& model){
     if (device.compare("CPU")){
-        mPorts[operation.outputs[0]] = Clamp(getPort(operation.inputs[0]), -1, 6);
+        sp<CpuPreparedModel> PreparedModelObj;
+        relu6DataPtr = Clamp(PreparedModelObj->getPort(operation.inputs[0]), -1, 6);
         return true;
     } else if (device.compare("GNA")){
         return false;
@@ -52,21 +72,8 @@ bool initialize(const std::string& device){
     }
 }
 
-inline OutputPort Clamp(const OutputPort &src, float min, float max) {
-    std::string name = "Clamp-";  // todo: make it unique
-    name = name << layer_name_count++;
-    InferenceEngine::LayerParams prms;
-    prms.precision = g_layer_precision;
-    prms.name = name;
-    auto layer = std::make_shared<InferenceEngine::ClampLayer>(prms);
-    layer->type = "Clamp";
-    layer->min_value = min;
-    layer->max_value = max;
-    layer->params["max"] = std::to_string(layer->max_value);
-    layer->params["min"] = std::to_string(layer->min_value);
-    src >> layer;
-    addOutput(layer, src->getTensorDesc().getDims());
-    return output(layer);
+OutputPort updateDataPtr() {
+    return relu6DataPtr;
 }
 
 }

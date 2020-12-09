@@ -32,5 +32,6 @@
 #include "Relu6.h"
 #include "Softmax.h"
 #include "Tanh.h"
+#include "Reshape.h"
 
 #endif  // OPS_H

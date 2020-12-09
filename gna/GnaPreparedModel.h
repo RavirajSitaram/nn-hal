@@ -42,9 +42,9 @@ public:
     ~GnaPreparedModel() override {  deinitialize(); }
 
     bool initialize();
-    virtual Blob::Ptr GetConstWeightsOperandAsTensor(uint32_t index) override;
-    virtual Blob::Ptr GetConstOperandAsTensor(int operand_index, int operation_idx) override;
-    virtual Blob::Ptr GetInOutOperandAsBlob(RunTimeOperandInfo& op, const uint8_t* buf,
+    Blob::Ptr GetConstWeightsOperandAsTensor(uint32_t index) override;
+    Blob::Ptr GetConstOperandAsTensor(int operand_index, int operation_idx) override;
+    Blob::Ptr GetInOutOperandAsBlob(RunTimeOperandInfo& op, const uint8_t* buf,
                                             uint32_t& len) override;
 
 protected:

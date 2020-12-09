@@ -10,7 +10,26 @@ cc_library_shared {
     srcs: [
         "Driver.cpp",
         "BasePreparedModel.cpp",
-        "operations/src/Relu.cpp"
+        "utils.cpp",
+        "cpu/CpuPreparedModel.cpp",
+        "gna/GnaPreparedModel.cpp",
+        "operations/src/Add.cpp",
+        "operations/src/AveragePool.cpp",
+        "operations/src/Concatination.cpp",
+        "operations/src/Convolution.cpp",
+        "operations/src/DepthwiseConvolution.cpp",
+        "operations/src/FullyConnected.cpp",
+        "operations/src/L2Normalization.cpp",
+        "operations/src/LocalResponseNormalization.cpp",
+        "operations/src/Logistic.cpp",
+        "operations/src/MaxPool.cpp",
+        "operations/src/Mul.cpp",
+        "operations/src/Relu.cpp",
+        "operations/src/Relu1.cpp",
+        "operations/src/Relu6.cpp",
+        "operations/src/Softmax.cpp",
+        "operations/src/Tanh.cpp",
+        "operations/src/Reshape.cpp"
     ],
 
     local_include_dirs: [

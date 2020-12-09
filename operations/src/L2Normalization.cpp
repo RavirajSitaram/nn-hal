@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "common.h"
 #include "L2Normalization.h"
+#include "CpuPreparedModel.h"
 
 namespace android {
 namespace hardware {
@@ -23,14 +23,24 @@ namespace neuralnetworks {
 namespace nnhal {
 namespace l2normalization{
 
+OutputPort l2normDataPtr;
+
+inline OutputPort L2Normalization(const OutputPort &src, bool isAcross, bool isShareChannel) {
+    auto layer = Generic("Normalize", src);
+    addAttr(layer, "across_spatial", isAcross ? 1 : 0);
+    addAttr(layer, "channel_shared", isShareChannel ? 1 : 0);
+    return output(layer);
+}
+
 bool validate(const Operation& operation, const Model& model){
     return true;
 }
 
-bool initialize(const std::string& device){
+bool initialize(const std::string& device, const Operation& operation, const Model& model){
     if (device.compare("CPU")){
         VLOG(L1, "OperationType::L2_NORMALIZATION");
         dumpOperationParam(operation);
+        sp<CpuPreparedModel> PreparedModelObj;
         /*
         * Inputs:
         * 0: A 4-D tensor, of shape [batches, height, width, depth], specifying the input.
@@ -39,8 +49,8 @@ bool initialize(const std::string& device){
         * 0: The output 4-D tensor, of shape [batches, out_height, out_width, depth].
         */
         // mPorts[operation.outputs[0]] = L2Normalization(getPort(operation.inputs[0]), true, false);
-        mPorts[operation.outputs[0]] =
-            L2Normalization(getPort(operation.inputs[0]), false, false);  // passing accross false
+        l2normDataPtr =
+            L2Normalization(PreparedModelObj->getPort(operation.inputs[0]), false, false);  // passing accross false
         return true;
     } else if (device.compare("GNA")){
         return false;
@@ -49,12 +59,10 @@ bool initialize(const std::string& device){
     }
 }
 
-inline OutputPort L2Normalization(const OutputPort &src, bool isAcross, bool isShareChannel) {
-    auto layer = Generic("Normalize", src);
-    addAttr(layer, "across_spatial", isAcross ? 1 : 0);
-    addAttr(layer, "channel_shared", isShareChannel ? 1 : 0);
-    return output(layer);
+OutputPort updateDataPtr() {
+    return l2normDataPtr;
 }
+
 
 }
 }  // namespace nnhal

@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef L2NORMALIZATION_H
-#define L2NORMALIZATION_H
+#ifndef RESHAPE_H
+#define RESHAPE_H
 
 #include "common.h"
 
@@ -22,11 +22,13 @@ namespace android {
 namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
-namespace l2normalization{
+namespace reshape{
 
 bool validate(const Operation& operation, const Model& model);
 bool initialize(const std::string& device, const Operation& operation, const Model& model);
 OutputPort updateDataPtr();
+
+OutputPort Reshape(const TensorDims &newDims, const OutputPort &src);
 
 }
 }  // namespace nnhal
@@ -34,4 +36,4 @@ OutputPort updateDataPtr();
 }  // namespace hardware
 }  // namespace android
 
-#endif  // L2NORMALIZATION_H
+#endif  // RESHAPE_H

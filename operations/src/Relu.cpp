@@ -14,14 +14,17 @@
  * limitations under the License.
  */
 
-#include "common.h"
+// #include "common.h"
 #include "Relu.h"
+#include "CpuPreparedModel.h"
 
 namespace android {
 namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
 namespace relu{
+
+OutputPort reluDataPtr;
 
 bool validate(const Operation& operation, const Model& model){
     const auto& input0 = model.operands[operation.inputs[0]];
@@ -41,15 +44,22 @@ bool validate(const Operation& operation, const Model& model){
     return true;
 }
 
-bool initialize(const std::string& device){
+bool initialize(const std::string& device, const Operation& operation, const Model& model){
     if (device.compare("CPU")){
         VLOG(L1, "OperationType::RELU");
-        mPorts[operation.outputs[0]] = ReLU(getPort(operation.inputs[0]));
+        // mPorts[operation.outputs[0]] = ReLU(getPort(operation.inputs[0]));
+        sp<CpuPreparedModel> PreparedModelObj;
+        reluDataPtr = ReLU(PreparedModelObj->getPort(operation.inputs[0]));
     } else if (device.compare("GNA")){
         return false;
     } else {
         return false;
     }
+    return false;
+}
+
+OutputPort updateDataPtr() {
+    return reluDataPtr;
 }
 
 // extern const std::string ReLU = "ReLU";
@@ -86,13 +96,13 @@ static IRLayer create(const OutputPort &src, const std::string &type) {
     return layer;
 }
 
-static IRLayer create(const IRLayer &src, const std::string &type) {
-    return create(output(src), type);
-}
-
 template <typename T>
 OutputPort ReLU(const T &src) {
-    return output(create(src, ReLU));
+    return output(relu::create(src, "ReLU"));
+}
+
+static IRLayer create(const IRLayer &src, const std::string &type) {
+    return create(output(src), type);
 }
 
 }

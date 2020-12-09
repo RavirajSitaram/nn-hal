@@ -15,10 +15,10 @@
  */
 
 #include "BasePreparedModel.h"
+
 #include <android-base/logging.h>
 #include <android/log.h>
 #include <log/log.h>
-#include <fstream>
 #include <thread>
 #include "ValidateHal.h"
 
@@ -26,9 +26,6 @@
 
 #define DISABLE_ALL_QUANT
 #define LOG_TAG "BasePreparedModel"
-
-#define PARAM_I32(i) ParseOperationInput<int32_t>(mModel, operation, i)
-#define PARAM_FP(i) ParseOperationInput<float>(mModel, operation, i)
 
 namespace android {
 namespace hardware {
@@ -44,10 +41,6 @@ void BasePreparedModel::deinitialize() {
     delete enginePtr;
     enginePtr = nullptr;
     VLOG(L1, "free engine");
-}
-
-inline size_t getSizeFromInts(int lower, int higher) {
-    return (uint32_t)(lower) + ((uint64_t)(uint32_t)(higher) << 32);
 }
 
 // TODO: short term, make share memory mapping and updating a utility function.
@@ -177,134 +170,6 @@ static bool setInfoAndAllocateIfNeeded(RunTimeOperandInfo* info, const Shape& sh
     return true;
 }
 
-inline size_t sizeOf(const TensorDims& dims) {
-    size_t ret = dims[0];
-    for (int i = 1; i < dims.size(); ++i) ret *= dims[i];
-    return ret;
-}
-
-uint32_t getNumberOfElements(const vec<uint32_t>& dims) {
-    uint32_t count = 1;
-    for (size_t i = 0; i < dims.size(); i++) {
-        count *= dims[i];
-    }
-    return count;
-}
-
-// shape is nchw, dims depends on layout
-TensorDims dimsToShape(const std::vector<uint32_t>& dims, Layout layout) {
-    VLOG(L3, "layout: %d", static_cast<int>(layout));
-    VLOGDIMS(L3, dims, "dims");
-    TensorDims shape;
-    uint32_t n, c, h, w;
-    // 4-D
-    switch (layout) {
-        case NCHW:
-        case OIHW:
-            n = dims[0];
-            c = dims[1];
-            h = dims[2];
-            w = dims[3];
-            shape = {n, c, h, w};
-            break;
-        case NHWC:
-            n = dims[0];
-            h = dims[1];
-            w = dims[2];
-            c = dims[3];
-            shape = {n, c, h, w};
-            break;
-        case C:
-            n = dims[0];
-            shape = {n};
-            break;
-        case NC:
-            n = dims[0];
-            c = dims[1];
-            shape = {n, c};
-            break;
-        default:
-            VLOG(L1, "unsupported layout %d", layout);
-    }
-
-    VLOGDIMS(L3, shape, "shape");
-    return shape;
-}
-
-// shape is nchw, dims depends on format
-std::vector<uint32_t>& shapeToDims(const TensorDims& shape, Layout layout) {
-    VLOG(L3, "layout: %d", static_cast<int>(layout));
-    VLOGDIMS(L3, shape, "shape");
-    uint32_t n, c, h, w;
-    std::vector<uint32_t> dims;
-    // 1-D
-    if (layout == C) {
-        n = shape[0];
-        dims = {n};
-        return dims;
-    }
-
-    if (layout == NC) {
-        n = shape[0];
-        c = shape[1];
-        dims = {n, c};
-        return dims;
-    }
-
-    // 4-D
-    // vpu accept nchw or oihw.
-    n = shape[0];
-    c = shape[1];
-    h = shape[2];
-    w = shape[3];
-
-    switch (layout) {
-        case NCHW:
-        case OIHW:
-            dims = {n, c, h, w};
-            break;
-        case NHWC:
-            dims = {n, h, w, c};
-            break;
-        default:
-            VLOG(L1, "unsupported layout %d", layout);
-    }
-
-    VLOGDIMS(L3, dims, "dims");
-    return dims;
-}
-
-TensorDims toDims(const vec<uint32_t>& dims) {
-    TensorDims td;
-    for (auto d : dims) td.push_back(d);
-    return td;
-}
-
-template <typename T>
-size_t product(const vec<T>& dims) {
-    size_t rc = 1;
-    for (auto d : dims) rc *= d;
-    return rc;
-}
-
-TensorDims permuteDims(const TensorDims& src, const vec<unsigned int>& order) {
-    TensorDims ret;
-    for (int i = 0; i < src.size(); i++) {
-        ret.push_back(src[order[i]]);
-    }
-    return ret;
-}
-
-// IRBlob::Ptr Permute(IRBlob::Ptr ptr, const vec<unsigned int> &order)
-IRBlob::Ptr Permute(IRBlob::Ptr ptr, const vec<unsigned int>& order) {
-    VLOG(L1, "Permute");
-    auto orig_dims = ptr->getTensorDesc().getDims();
-    auto dims = permuteDims(orig_dims, order);
-    ptr->getTensorDesc().setDims(dims);
-
-    return ptr;
-}
-
 bool BasePreparedModel::isOperationSupported(const Operation& operation, const Model& model) {
     VLOG(L1, "Check operation %d", operation.type);
 
@@ -376,6 +241,10 @@ bool BasePreparedModel::isOperationSupported(const Operation& operation, const M
             if(!softmax::validate(operation, model))
                 return false;
         } break;
+        case OperationType::RESHAPE:{
+            if(!reshape::validate(operation, model))
+                return false;
+        } break;
         default:
             VLOG(L1, "unsupport operation %d", operation.type);
             return false;
@@ -420,7 +289,7 @@ void BasePreparedModel::initializeInput() {
         auto inputDims = mPorts[i]->getTensorDesc().getDims();
 
         uint32_t nelem = getNumberOfElements(mOperands[i].dimensions);
-        auto inputElem = sizeOf(inputDims);
+        auto inputElem = sizeOfTensor(inputDims);
         if (nelem != inputElem) {
             VLOG(L1, "set operand input dims to real input dims\n");
             for (auto j = 0; j < inputDims.size(); j++)
@@ -446,7 +315,7 @@ bool BasePreparedModel::finalizeOutput(/*RunTimeOperandInfo* output */) {
         auto outputDims = mPorts[i]->getTensorDesc().getDims();
 
         uint32_t nelem = getNumberOfElements(mOperands[i].dimensions);
-        auto outputElem = sizeOf(outputDims);
+        auto outputElem = sizeOfTensor(outputDims);
         if (nelem != outputElem) {
             VLOG(L1, "set correct dims as operand output dims different than real output dims\n");
         }
@@ -468,7 +337,6 @@ T BasePreparedModel::ParseOperationInput(const Model& model, const Operation& op
 
     return value;
 }
-
 
 const uint8_t* BasePreparedModel::GetOperandMemory(const Model& model, uint32_t index,
                                                uint32_t& len_out) {
@@ -521,6 +389,35 @@ std::vector<T> BasePreparedModel::GetConstVecOperand(const Model& model, uint32_
     uint32_t len;
     const uint8_t* buf = GetOperandMemory(model, index, len);
     return GetConstVecFromBuffer<T>(buf, len);
+}
+
+template <typename T>
+T GetConstFromBuffer(const uint8_t* buf, uint32_t len) {
+    VLOG(L1, "buf: %p, len: %d", buf, len);
+    if (len != sizeof(T)) {
+        VLOG(L1, "fix me: typeid(T).name() should be %d bytes", sizeof(T));
+        // fix me if buffer is of type float and if float and OperandLifeTime::CONSTANT_REFERENCE
+        nnAssert(false);
+    }
+    return *(T*)(buf);
+}
+
+template <typename T>
+std::vector<T> GetConstVecFromBuffer(const uint8_t* buf, uint32_t len) {
+    int n = len / sizeof(T);
+    if (n * sizeof(T) != len) {
+        VLOG(L1, "typeid(T).name() should be  multiples of %d bytes", sizeof(T));
+        nnAssert(false);
+    }
+
+    std::vector<T> ret;
+
+    for (int i = 0; i < n; i++) {
+        ret.push_back(*(T*)buf);
+        buf += sizeof(T);
+    }
+
+    return ret;
 }
 
 bool BasePreparedModel::isConst(int index) {

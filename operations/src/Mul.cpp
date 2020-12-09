@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "common.h"
 #include "Mul.h"
+#include "CpuPreparedModel.h"
 
 namespace android {
 namespace hardware {
@@ -23,20 +23,49 @@ namespace neuralnetworks {
 namespace nnhal {
 namespace mul{
 
+OutputPort mulDataPtr;
+
+inline static IRLayer create(const OutputPort &src1, const OutputPort &src2) {
+    std::string name = "Mul-";  // todo: make it unique
+    name = name << layer_name_count++;
+    InferenceEngine::LayerParams prm;
+    prm.precision = g_layer_precision;
+    prm.name = name;
+    auto mul = std::make_shared<InferenceEngine::EltwiseLayer>(prm);
+    mul->type = "Mul";
+    mul->_operation = InferenceEngine::EltwiseLayer::Prod;
+    src1 >> mul;
+    src2 >> mul;
+    if (src1->getTensorDesc().getDims() != src2->getTensorDesc().getDims())
+        THROW_IE_EXCEPTION << "input sizes for Element wise Mul do not match";
+    addOutput(mul, src1->getTensorDesc().getDims());
+    return mul;
+}
+
+inline OutputPort operator*(const OutputPort &a, const OutputPort &b) {
+    return output(create(a, b));
+}
+
 bool validate(const Operation& operation, const Model& model){
     return true;
 }
 
-bool initialize(const std::string& device, std::shared_ptr<CreateNgraph> &mCreateNgraph){
+bool initialize(const std::string& device, const Operation& operation, const Model& model){
     if (device.compare("CPU")){
-        mPorts[operation.outputs[0]] =
-            handleFusion(getPort(operation.inputs[0]) * getPort(operation.inputs[1]), PARAM_I32(2), mCreateNgraph);
+        VLOG(L1, "OperationType::MUL");
+        sp<CpuPreparedModel> PreparedModelObj;
+        mulDataPtr =
+            handleFusion(PreparedModelObj->getPort(operation.inputs[0]) * PreparedModelObj->getPort(operation.inputs[1]), PreparedModelObj->ParseOperationInput<int32_t>(model, operation, 2));
         return true;
     } else if (device.compare("GNA")){
         return false;
     } else {
         return false;
     }
+}
+
+OutputPort updateDataPtr() {
+    return mulDataPtr;
 }
 
 }

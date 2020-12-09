@@ -14,14 +14,33 @@
  * limitations under the License.
  */
 
-#include "common.h"
 #include "Softmax.h"
+#include "CpuPreparedModel.h"
 
 namespace android {
 namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
 namespace softmax{
+
+OutputPort softmaxDataPtr;
+
+inline static OutputPort Softmax(const OutputPort &src) {
+    auto inputDims = src->getTensorDesc().getDims();
+
+    std::string name = "Softmax-";  // todo: make it unique
+    name = name << layer_name_count++;
+    InferenceEngine::LayerParams prm;
+    prm.precision = g_layer_precision;
+    prm.name = name;
+    auto l = std::make_shared<InferenceEngine::SoftMaxLayer>(prm);
+    l->type = "SoftMax";
+    src >> l;
+    // addOutput(l, src->getTensorDesc().getDims());
+    addOutput(l, inputDims);
+
+    return output(l);
+}
 
 bool validate(const Operation& operation, const Model& model){
     VLOG(L1, "Validating SOFTMAX operation params");
@@ -42,20 +61,21 @@ bool validate(const Operation& operation, const Model& model){
         return false;
     }
     if (beta != 1) {
-        VLOG_CHECKFAIL("NNERR:beta equal to 1 only supported");
+        VLOG(L1,"NNERR:beta equal to 1 only supported");
         return false;
     }
     return true;
 }
 
-bool initialize(const std::string& device){
+bool initialize(const std::string& device, const Operation& operation, const Model& model){
     if (device.compare("CPU")){
         VLOG(L1, "OperationType::SOFTMAX");
+        sp<CpuPreparedModel> PreparedModelObj;
 
-        auto input = getPort(operation.inputs[0]);
+        auto input = PreparedModelObj->getPort(operation.inputs[0]);
 
-        mPorts[operation.outputs[0]] = Softmax(input);
-        float beta /*scale*/ = PARAM_FP(1);
+        softmaxDataPtr = Softmax(input);
+        float beta /*scale*/ = PreparedModelObj->ParseOperationInput<float>(model, operation, 1);
 
         VLOG(L1, "Softmax beta = %f ", beta);
 
@@ -72,21 +92,8 @@ bool initialize(const std::string& device){
     }
 }
 
-static OutputPort Softmax(const OutputPort &src) {
-    auto inputDims = src->getTensorDesc().getDims();
-
-    std::string name = "Softmax-";  // todo: make it unique
-    name = name << layer_name_count++;
-    InferenceEngine::LayerParams prm;
-    prm.precision = g_layer_precision;
-    prm.name = name;
-    auto l = std::make_shared<InferenceEngine::SoftMaxLayer>(prm);
-    l->type = "SoftMax";
-    src >> l;
-    // addOutput(l, src->getTensorDesc().getDims());
-    addOutput(l, inputDims);
-
-    return output(l);
+OutputPort updateDataPtr() {
+    return softmaxDataPtr;
 }
 
 

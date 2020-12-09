@@ -25,7 +25,8 @@ namespace nnhal {
 namespace relu{
 
 bool validate(const Operation& operation, const Model& model);
-bool initialize(const std::string& device);
+bool initialize(const std::string& device, const Operation& operation, const Model& model);
+OutputPort updateDataPtr();
 template <typename T>
 OutputPort ReLU(const T &src);
 

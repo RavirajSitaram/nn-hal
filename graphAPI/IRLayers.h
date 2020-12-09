@@ -52,9 +52,22 @@ namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
 
+struct GenConvParams {
+    int groups = 1;
+    std::vector<float> weightsBuf;
+    std::vector<size_t> weightsDims;
+    std::vector<float> biasesBuf;
+    std::vector<size_t> biasesDims;
+    size_t weightsSize;
+    std::vector<size_t> strides;
+    std::vector<std::ptrdiff_t> pads_begin;
+    std::vector<std::ptrdiff_t> pads_end;
+    std::vector<size_t> dilations;
+    const char *pad_type;
+};
+
 extern int layer_name_count;
 extern InferenceEngine::Precision g_layer_precision;
-inline size_t sizeOf(const TensorDims &dims);
 
 inline OutputPort addOutput(const IRLayer &layer, const InferenceEngine::SizeVector &dims) {
     std::string d_name = layer->name;
@@ -158,64 +171,6 @@ std::string dumpVec(std::vector<T, A> const &vec) {
     return oss.str();
 }
 
-namespace FCLayer {
-static IRLayer create(const IRBlob::Ptr &weights, const OutputPort &src) {
-#ifdef NNLOG
-    ALOGI("Create FC layer");
-#endif
-    std::string name = "FC-";  // todo: make it unique
-    name = name << layer_name_count++;
-    InferenceEngine::LayerParams prm;
-    prm.precision = g_layer_precision;
-    prm.name = name;
-
-    auto inDims = src->getTensorDesc().getDims();  // (batch, IFM)
-
-    auto wDim = weights->getTensorDesc().getDims();
-
-    IR_ASSERT(inDims.size() == 2);
-
-    unsigned int ofm = 0;
-    if (wDim.size() == 2) {
-#ifdef NNLOG
-        ALOGI("inDims[0] = %d inDims[1] = %d", inDims[0], inDims[1]);
-        ALOGI("wDim[0] = %d wDim[1] = %d", wDim[0], wDim[1]);
-#endif
-
-        IR_ASSERT(inDims[1] == wDim[1]);           // Weights: (Out,In)
-        ofm = static_cast<unsigned int>(wDim[0]);  // Out
-    } else if (wDim.size() == 1)                   // linear, just a blob, line in IR
-    {
-        ofm = static_cast<unsigned int>(weights->size() / inDims[1]);
-        IR_ASSERT(inDims[1] * ofm == weights->size());  // should be divided properly
-    } else
-        THROW_IE_EXCEPTION << "expecting weights for FC only as 1 dim (blob) or 2 dim (Matrix)";
-
-    auto fc = std::make_shared<InferenceEngine::FullyConnectedLayer>(prm);
-    fc->type = "FullyConnected";
-
-    fc->_out_num = ofm;
-    addAttr(fc, "out-size ", ofm);  // aks added
-    // todo: assert that input should be cols
-    addOutput(fc, {inDims[0], static_cast<uint32_t>(fc->_out_num)});
-    src >> fc;
-    fc->_weights = weights;
-    fc->blobs["weights"] = weights;  // todo: have setter for those layers...
-    return fc;
-}
-};  // namespace FCLayer
-
-inline InferenceEngine::CNNLayer::Ptr operator*(const IRBlob::Ptr &weights, const IRLayer &b) {
-    std::cout << "FCLayer::create operator*(const IRBlob::Ptr &weights, const IRLayer &b)"
-              << std::endl;
-    return FCLayer::create(weights, output(b));
-}
-
-inline OutputPort operator*(const IRBlob::Ptr &weights, const OutputPort &op) {
-    std::cout << "FCLayer::create operator*(const IRBlob::Ptr &weights, const OutputPort &op)"
-              << std::endl;
-    return output(FCLayer::create(weights, op));
-}
 
 static OutputPort ScaleShiftNode(const OutputPort &src, const IRBlob::Ptr &scale,
                                  const IRBlob::Ptr &bias) {
@@ -258,20 +213,6 @@ inline OutputPort AddTryConst(const OutputPort &src, const IRBlob::Ptr &biases) 
 inline OutputPort operator+(const OutputPort &src, const IRBlob::Ptr &biases) {
     return AddTryConst(src, biases);
 }
-
-namespace ConvLayer {
-static IRLayer create(const OutputPort &src) {
-    std::string name = "Conv-";  // todo: make it unique
-    InferenceEngine::LayerParams prm;
-    prm.precision = g_layer_precision;
-    name = name << layer_name_count++;
-    prm.name = name;
-    auto conv_layer = std::make_shared<InferenceEngine::ConvolutionLayer>(prm);
-    conv_layer->type = "Convolution";
-    src >> conv_layer;
-    return conv_layer;
-}
-};  // namespace ConvLayer
 
 struct Point2D {
     int x, y;
@@ -345,41 +286,6 @@ inline OutputPort Crop(const OutputPort &src, const std::vector<int> &axis,
     return addOutput(l, sv);
 }
 
-inline OutputPort Pooling(const OutputPort &inp, const Point2D &kernel, const Point2D &stride,
-                          const Point2D &pad, InferenceEngine::PoolingLayer::PoolType type) {
-    auto src = inp;
-    std::string name = "Pooling-";  // todo: make it unique
-    name = name << layer_name_count++;
-    InferenceEngine::LayerParams prm;
-    prm.precision = g_layer_precision;
-    prm.name = name;
-    auto ret = std::make_shared<InferenceEngine::PoolingLayer>(prm);
-    ret->type = "Pooling";
-
-    ret->_kernel.clear();
-    ret->_kernel.insert(InferenceEngine::X_AXIS, kernel.x);
-    ret->_kernel.insert(InferenceEngine::Y_AXIS, kernel.y);
-    ret->_stride.clear();
-    ret->_stride.insert(InferenceEngine::X_AXIS, stride.x);
-    ret->_stride.insert(InferenceEngine::Y_AXIS, stride.y);
-    ret->_padding.clear();
-    ret->_padding.insert(InferenceEngine::X_AXIS, pad.x);
-    ret->_padding.insert(InferenceEngine::Y_AXIS, pad.y);
-
-    ret->_type = type;
-    ret->_exclude_pad = true;
-
-    auto inDims = src->getTensorDesc().getDims();
-
-    Point2D in_size = {static_cast<int>(inDims[3]), static_cast<int>(inDims[2])};
-    // todo: handle uneven padding
-    Point2D out_size = (in_size + pad + pad - kernel + stride) / stride;
-    src >> ret;
-    addOutput(ret, {inDims[0], inDims[1], (size_t)out_size.y, (size_t)out_size.x});
-    return output(ret);
-}
-
-
 namespace SumLayer {
 static IRLayer create(const OutputPort &src1, const OutputPort &src2) {
     std::string name = "Sum-";  // todo: make it unique
@@ -397,29 +303,6 @@ static IRLayer create(const OutputPort &src1, const OutputPort &src2) {
     return sum;
 }
 };  // namespace SumLayer
-
-namespace MulLayer {
-static IRLayer create(const OutputPort &src1, const OutputPort &src2) {
-    std::string name = "Mul-";  // todo: make it unique
-    name = name << layer_name_count++;
-    InferenceEngine::LayerParams prm;
-    prm.precision = g_layer_precision;
-    prm.name = name;
-    auto mul = std::make_shared<InferenceEngine::EltwiseLayer>(prm);
-    mul->type = "Mul";
-    mul->_operation = InferenceEngine::EltwiseLayer::Prod;
-    src1 >> mul;
-    src2 >> mul;
-    if (src1->getTensorDesc().getDims() != src2->getTensorDesc().getDims())
-        THROW_IE_EXCEPTION << "input sizes for Element wise Mul do not match";
-    addOutput(mul, src1->getTensorDesc().getDims());
-    return mul;
-}
-};  // namespace MulLayer
-
-inline OutputPort operator*(const OutputPort &a, const OutputPort &b) {
-    return output(MulLayer::create(a, b));
-}
 
 namespace ScaleShift {
 
@@ -498,86 +381,6 @@ inline std::vector<OutputPort> Split(const OutputPort &src, int splitElements, i
 
 inline std::vector<OutputPort> Split(const IRLayer &src, int splitElements, int axis = 1) {
     return Split(output(src), splitElements, axis);
-}
-
-
-inline OutputPort Reshape(const TensorDims &newDims, const OutputPort &src) {
-    if (sizeOf(src->getTensorDesc().getDims()) != sizeOf(newDims))
-        THROW("Cannot reorder different volumes");
-
-    /*//first implementation
-        if(src->creatorLayer.lock()->type == "Reshape") // fuse reshapes
-        {
-            src->setDims(newDims);
-            return src;
-        }
-
-        auto op = output(Generic("Reshape", src));
-        op->setDims(newDims);
-
-        return op;
-    */
-    // end of first implementation
-
-    /*
-     //FIX ME fuse reshape
-        //if(src->creatorLayer.lock()->type == "Reshape") // fuse reshapes
-        if(src->getCreatorLayer().lock()->type == "Reshape") // fuse reshapes
-        {
-            src->setDims(newDims);
-            return src;
-        }
-    */
-    // latest implementation
-
-    std::string name = "Reshape-";  // todo: make it unique
-    name = name << layer_name_count++;
-    InferenceEngine::LayerParams prms;
-    prms.precision = g_layer_precision;
-    prms.name = name;
-    auto layer = std::make_shared<InferenceEngine::ReshapeLayer>(prms);
-    layer->type = "Reshape";
-    src >> layer;
-    // addOutput(layer, src->getTensorDesc().getDims());
-
-    /*
-    brief A vector of sizes of the shape
-    std::vector<int> shape;
-    */
-
-    layer->params["axis"] = std::to_string(layer->axis);
-    layer->params["num_axes"] = std::to_string(layer->num_axes);
-
-    /*  //check if mandatory to provide shape
-        for (int i = 0; i < newDims.size(); i++)
-        layer->shape[i] = static_cast<int>(newDims[i]);
-        // VectorToStringI(layer->shape)
-        std::string result;
-        const char sep = ',';
-        for (auto it : layer->shape) {
-            result += std::to_string(it) + sep;
-        }
-        if (!result.empty()) {
-            result = result.substr(0, result.size() - 2);
-        }
-
-       layer->params["dim"] = result;
-    */
-    addOutput(layer, newDims);
-    auto op = output(layer);
-    // op->setDims(newDims);
-
-    /*
-        //FIX ME : HACK for [VPU] Unsupported 1D dimensions
-        if (op->getTensorDesc().getDims().size() == 1) {
-        TensorDims dims = {1, newDims[0]};
-        op->setDims(dims);
-        #ifdef NNLOG
-        ALOGI("Reshape oputput data set dims size = %lu ", op->getTensorDesc().getDims().size());
-        #endif
-        }
-    */
-    return op;
 }
 
 
