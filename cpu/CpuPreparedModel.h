@@ -39,15 +39,15 @@ class CpuPreparedModel : public BasePreparedModel {
 
 public:
     CpuPreparedModel(const Model& model) : BasePreparedModel("CPU", model) {}
-    ~CpuPreparedModel() override {  deinitialize(); }
-    
-    bool initialize();
+    ~CpuPreparedModel() { deinitialize(); }
+
+    bool initialize() override;
     Blob::Ptr GetConstWeightsOperandAsTensor(uint32_t index) override;
     Blob::Ptr GetConstOperandAsTensor(int operand_index, int operation_idx) override;
     Blob::Ptr GetInOutOperandAsBlob(RunTimeOperandInfo& op, const uint8_t* buf,
                                             uint32_t& len) override;
 protected:
-    void deinitialize();
+    void deinitialize() override;
 };
 
 }  // namespace nnhal

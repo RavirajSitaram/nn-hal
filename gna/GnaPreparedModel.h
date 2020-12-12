@@ -39,16 +39,15 @@ class GnaPreparedModel : public BasePreparedModel {
 
 public:
     GnaPreparedModel(const Model& model) : BasePreparedModel("GNA", model) {}
-    ~GnaPreparedModel() override {  deinitialize(); }
+    ~GnaPreparedModel() { deinitialize(); }
 
-    bool initialize();
+    bool initialize() override;
     Blob::Ptr GetConstWeightsOperandAsTensor(uint32_t index) override;
     Blob::Ptr GetConstOperandAsTensor(int operand_index, int operation_idx) override;
     Blob::Ptr GetInOutOperandAsBlob(RunTimeOperandInfo& op, const uint8_t* buf,
                                             uint32_t& len) override;
-
 protected:
-    void deinitialize();
+    void deinitialize() override;
 
 };
 

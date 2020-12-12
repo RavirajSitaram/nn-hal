@@ -132,9 +132,13 @@ class BasePreparedModel : public V1_2::IPreparedModel{
             mUseNgraph = isNgraphPropSet();
             mCreateNgraph = std::make_shared<CreateNgraph>();
         }
-        ~BasePreparedModel() override { deinitialize(); }
-        virtual bool initialize();
+
+        virtual ~BasePreparedModel() { deinitialize(); }
+
         static bool isOperationSupported(const Operation& operation, const Model& model);
+
+        virtual bool initialize();
+
         Return<ErrorStatus> execute(const Request& request,
                                 const sp<V1_0::IExecutionCallback>& callback) override;
         Return<ErrorStatus> execute_1_2(const Request& request, MeasureTiming measure,
@@ -146,6 +150,7 @@ class BasePreparedModel : public V1_2::IPreparedModel{
             const MQDescriptorSync<V1_2::FmqRequestDatum>& requestChannel,
             const MQDescriptorSync<V1_2::FmqResultDatum>& resultChannel,
             configureExecutionBurst_cb cb) override;
+
         OutputPort getPort(int index);
 
         template <typename T>
@@ -155,17 +160,17 @@ class BasePreparedModel : public V1_2::IPreparedModel{
 
         template <typename T>
         std::vector<T> GetConstVecOperand(const Model& model, uint32_t index); //for reshape
-        
+
         IRDocument mNet; //public for add operation
         std::shared_ptr<CreateNgraph> mCreateNgraph; //for operations
-    protected:
-        void deinitialize();
+protected:
+        virtual void deinitialize();
         bool initializeRunTimeOperandInfo();
         void initializeInput();
         bool finalizeOutput();
         template <typename T>
         T GetConstOperand(const Model& model, uint32_t index);
-        
+
         template <typename T>
         T GetConstFromBuffer(const uint8_t* buf, uint32_t len);
         template <typename T>
@@ -190,7 +195,7 @@ class BasePreparedModel : public V1_2::IPreparedModel{
         std::vector<RunTimePoolInfo> mPoolInfos;
         std::vector<OutputPort> mPorts;  // typedef std::shared_ptr<Data> DataPtr;
         ExecuteNetwork* enginePtr;
-        
+
         bool mUseNgraph;
 };
 

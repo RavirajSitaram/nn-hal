@@ -180,19 +180,19 @@ bool BasePreparedModel::isOperationSupported(const Operation& operation, const M
         case OperationType::ADD: {
             if(!add::validate(operation, model))
                 return false;
-        } break;  
+        } break;
         case OperationType::AVERAGE_POOL_2D: {
             if(!avgpool::validate(operation, model))
                 return false;
-        } break;  
+        } break;
         case OperationType::FULLY_CONNECTED: {
             if(!avgpool::validate(operation, model))
                 return false;
-        } break;  
+        } break;
         case OperationType::MUL:{
             if(!mul::validate(operation, model))
                 return false;
-        } break;    
+        } break;
         case OperationType::MAX_POOL_2D: {
             if(!maxpool::validate(operation, model))
                 return false;
@@ -392,7 +392,7 @@ std::vector<T> BasePreparedModel::GetConstVecOperand(const Model& model, uint32_
 }
 
 template <typename T>
-T GetConstFromBuffer(const uint8_t* buf, uint32_t len) {
+T BasePreparedModel::GetConstFromBuffer(const uint8_t* buf, uint32_t len) {
     VLOG(L1, "buf: %p, len: %d", buf, len);
     if (len != sizeof(T)) {
         VLOG(L1, "fix me: typeid(T).name() should be %d bytes", sizeof(T));
@@ -403,7 +403,7 @@ T GetConstFromBuffer(const uint8_t* buf, uint32_t len) {
 }
 
 template <typename T>
-std::vector<T> GetConstVecFromBuffer(const uint8_t* buf, uint32_t len) {
+std::vector<T> BasePreparedModel::GetConstVecFromBuffer(const uint8_t* buf, uint32_t len) {
     int n = len / sizeof(T);
     if (n * sizeof(T) != len) {
         VLOG(L1, "typeid(T).name() should be  multiples of %d bytes", sizeof(T));
@@ -744,6 +744,7 @@ Return<void> BasePreparedModel::executeSynchronously(const Request& request, Mea
         cb(ErrorStatus::GENERAL_FAILURE, {}, kNoTiming);
         return Void();
     }
+
     auto inOutData = [this, &requestPoolInfos](const std::vector<uint32_t>& indexes,
                                                const hidl_vec<RequestArgument>& arguments,
                                                bool inputFromRequest, ExecuteNetwork* enginePtr,
@@ -764,7 +765,6 @@ Return<void> BasePreparedModel::executeSynchronously(const Request& request, Mea
             }
             operand.buffer = r.buffer + arg.location.offset;  // r.getBuffer()
             operand.length = arg.location.length;  // sizeOfData(operand.type, operand.dimensions);
-
             VLOG(L1, "Copy request input/output to model input/output");
             if (inputFromRequest) {
                 auto inputBlob = GetInOutOperandAsBlob(
@@ -886,6 +886,19 @@ Blob::Ptr BasePreparedModel::GetInOutOperandAsBlob(RunTimeOperandInfo& op, const
     return nullptr;
 }
 
+template int BasePreparedModel::ParseOperationInput<int>(
+        android::hardware::neuralnetworks::V1_2::Model const&,
+        android::hardware::neuralnetworks::V1_2::Operation const&, unsigned int);
+template float BasePreparedModel::ParseOperationInput<float>(
+        android::hardware::neuralnetworks::V1_2::Model const&,
+        android::hardware::neuralnetworks::V1_2::Operation const&, unsigned int);
+
+template int BasePreparedModel::GetConstOperand<int>(
+        android::hardware::neuralnetworks::V1_2::Model const&, unsigned int);
+template int BasePreparedModel::GetConstFromBuffer<int>(unsigned char const*, unsigned int);
+template std::__1::vector<unsigned int, std::__1::allocator<unsigned int> >
+        BasePreparedModel::GetConstVecOperand<unsigned int>(
+                android::hardware::neuralnetworks::V1_2::Model const&, unsigned int);
 }  // namespace nnhal
 }  // namespace neuralnetworks
 }  // namespace hardware
