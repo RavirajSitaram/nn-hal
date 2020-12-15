@@ -23,6 +23,7 @@
 #include "Driver.h"
 #include "BasePreparedModel.h"
 #include "utils.h"
+// #include "CpuPreparedModel.h"
 
 #include "IENetwork.h"
 #include "IRLayer.h"
@@ -38,23 +39,6 @@ namespace neuralnetworks {
 namespace nnhal {
 
 extern unsigned int debugMask;
-
-inline OutputPort Clamp(const OutputPort &src, float min, float max) {
-    std::string name = "Clamp-";  // todo: make it unique
-    name = name << layer_name_count++;
-    InferenceEngine::LayerParams prms;
-    prms.precision = g_layer_precision;
-    prms.name = name;
-    auto layer = std::make_shared<InferenceEngine::ClampLayer>(prms);
-    layer->type = "Clamp";
-    layer->min_value = min;
-    layer->max_value = max;
-    layer->params["max"] = std::to_string(layer->max_value);
-    layer->params["min"] = std::to_string(layer->min_value);
-    src >> layer;
-    addOutput(layer, src->getTensorDesc().getDims());
-    return output(layer);
-}
 
 inline void calculateExplicitPadding(int32_t in_size, int32_t stride, int32_t filter_size,
                               int32_t padding_implicit, int32_t* padding_head,
@@ -81,26 +65,7 @@ inline void calculateExplicitPadding(int32_t in_size, int32_t stride, int32_t fi
 // };
 
 // template<class T>
-inline OutputPort handleFusion(const OutputPort& out, int32_t fusedOp) {
-    // VLOG(L1, "fusedOp: %d", fusedOp);
-    OutputPort ret = out;
-    if (fusedOp == (int32_t)FusedActivationFunc::RELU) {
-        // VLOG(L1, "fusedOp is RELU");
-        // ret = relu::ReLU(out);
-        //mCreateNgraph->addRelu(ret->getName(), out->getName());
-    } else if (fusedOp == (int32_t)FusedActivationFunc::RELU1) {
-        // VLOG(L1, "fusedOp is RELU1");
-        ret = Clamp(out, -1, 1);
-        // mCreateNgraph->addClamp(ret->getName(), out->getName(), -1, 1);
-    } else if (fusedOp == (int32_t)FusedActivationFunc::RELU6) {
-        // VLOG(L1, "fusedOp is RELU6");
-        ret = Clamp(out, 0, 6);
-        // mCreateNgraph->addClamp(ret->getName(), out->getName(), 0, 6);
-    }
 
-    // VLOG(L1, "No ActivationFunc");
-    return ret;
-}
 
 }  // namespace nnhal
 }  // namespace neuralnetworks

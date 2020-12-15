@@ -17,6 +17,7 @@
 #include "FullyConnected.h"
 #include "CpuPreparedModel.h"
 #include "Reshape.h"
+#include "fusion.h"
 
 namespace android {
 namespace hardware {

@@ -16,6 +16,7 @@
 
 #include "Convolution.h"
 #include "CpuPreparedModel.h"
+#include "fusion.h"
 
 namespace android {
 namespace hardware {

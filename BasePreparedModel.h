@@ -196,7 +196,7 @@ protected:
         std::vector<OutputPort> mPorts;  // typedef std::shared_ptr<Data> DataPtr;
         ExecuteNetwork* enginePtr;
 
-        bool mUseNgraph;
+        bool mUseNgraph = true;
 };
 
 }  // namespace nnhal
