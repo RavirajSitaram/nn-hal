@@ -25,6 +25,9 @@ namespace nnhal {
 namespace convolution{
 
 OutputPort convDataPtr;
+GenConvParams genConvPrms;
+std::string nodeName;
+std::string inputName;
 
 inline static IRLayer create(const OutputPort &src) {
     std::string name = "Conv-";  // todo: make it unique
@@ -261,9 +264,10 @@ bool validate(const Operation& operation, const Model& model){
     return true;
 }
 
-bool initialize(const std::string& device, const Operation& operation, const Model& model){
-    if (device.compare("CPU")){
-        VLOG(L1, "OperationType::CONV_2D");
+bool initialize(const char* device, const Operation& operation, const Model model){
+    VLOG(L1, "Initializing OperationType::CONV_2D");
+    if (strcmp(device, "CPU") == 0){
+        VLOG(L1, "Initializing OperationType::CONV_2D, inside cpu");
         dumpOperationParam(operation);
         sp<CpuPreparedModel> PreparedModelObj;
         uint32_t mPadreq;
@@ -370,9 +374,11 @@ bool initialize(const std::string& device, const Operation& operation, const Mod
 
         prms.biases = static_cast<IRBlob::Ptr>(bias);
         auto out = Convolution(input, prms);
-        GenConvParams genConvPrms;
+        
         ConvolutionParamsToGenConvParams(prms, genConvPrms, filter, bias);
-        PreparedModelObj->mCreateNgraph->addConvolution(out->getName(), input->getName(), genConvPrms);
+        nodeName = out->getName();
+        inputName = input->getName();
+        //PreparedModelObj->mCreateNgraph->addConvolution(out->getName(), input->getName(), genConvPrms);
 
         if (fusion_index < 0) {
             VLOG(L1, "invalid fusion index");
@@ -395,15 +401,26 @@ bool initialize(const std::string& device, const Operation& operation, const Mod
 
         return true;
     
-    } else if (device.compare("GNA")){
+    } else if (strcmp(device, "GNA") == 0){
+        VLOG(L1, "Initializing OperationType::CONV_2D, inside gna");
         return false;
     } else {
+        VLOG(L1, "Initializing OperationType::CONV_2D, inside default");
         return false;
     }
 }
 
 OutputPort updateDataPtr() {
     return convDataPtr;
+}
+std::string getNodeName(){
+    return nodeName;
+}
+std::string getInputName(){
+    return inputName;
+}
+GenConvParams getGenConvPrms(){
+    return genConvPrms;
 }
 
 }

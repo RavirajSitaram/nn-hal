@@ -60,12 +60,12 @@ bool validate(const Operation& operation, const Model& model){
     return true;
 }
 
-bool initialize(const std::string& device, const Operation& operation, const Model& model){
-    if (device.compare("CPU")){
+bool initialize(const char* device, const Operation& operation, const Model& model){
+    if (strcmp(device, "CPU") == 0){
         sp<CpuPreparedModel> PreparedModelObj;
         relu6DataPtr = Clamp(PreparedModelObj->getPort(operation.inputs[0]), -1, 6);
         return true;
-    } else if (device.compare("GNA")){
+    } else if (strcmp(device, "GNA") == 0){
         return false;
     } else {
         return false;

@@ -23,6 +23,10 @@ namespace neuralnetworks {
 namespace nnhal {
 namespace concat{
 
+std::string nodeName;
+std::vector<std::string> inputName;
+int axisPrms;
+
     inline OutputPort Concat(const std::vector<OutputPort> inputs, int axis = 1){
         std::string name = "Concat-";  // todo: make it unique
         name = name << layer_name_count++;
@@ -49,8 +53,8 @@ namespace concat{
         return true;
     }
 
-    bool initialize(const std::string& device, const Operation& operation, const Model& model){
-        if (device.compare("CPU")){
+    bool initialize(const char* device, const Operation& operation, const Model& model){
+        if (strcmp(device, "CPU") == 0){
             VLOG(L1, "OperationType::CONCATENATION");
             uint32_t axis;
             auto n = operation.inputs.size() - 1;
@@ -75,15 +79,27 @@ namespace concat{
             for (int i = 0; i < inputs.size(); ++i) {
                 inputNames.push_back(inputs[i]->getName());
             }
-            PreparedModelObj->mCreateNgraph->addConcat(out->getName(), inputNames, axis);
+            nodeName = out->getName();
+            inputName = inputNames;
+            axisPrms = axis;
+            // PreparedModelObj->mCreateNgraph->addConcat(out->getName(), inputNames, axis);
 
             return true;
-        } else if (device.compare("GNA")){
+        } else if (strcmp(device, "GNA") == 0){
             return false;
         } else {
             return false;
         }
     }
+std::string getNodeName(){
+    return nodeName;
+}
+std::vector<std::string> getInputName(){
+    return inputName;
+}
+int getAxis(){
+    return axisPrms;
+}
 
 }
 }  // namespace nnhal

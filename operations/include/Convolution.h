@@ -17,6 +17,7 @@
 #define CONVOLUTION_H
 
 #include "common.h"
+#include "IRLayers.h"
 
 namespace android {
 namespace hardware {
@@ -25,8 +26,11 @@ namespace nnhal {
 namespace convolution{
 
 bool validate(const Operation& operation, const Model& model);
-bool initialize(const std::string& device, const Operation& operation, const Model& model);
+bool initialize(const char* device, const Operation& operation, const Model model);
 OutputPort updateDataPtr();
+std::string getNodeName();
+std::string getInputName();
+GenConvParams getGenConvPrms();
 
 }
 }  // namespace nnhal

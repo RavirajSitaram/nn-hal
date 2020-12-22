@@ -25,8 +25,11 @@ namespace nnhal {
 namespace concat{
 
 bool validate(const Operation& operation, const Model& model);
-bool initialize(const std::string& device, const Operation& operation, const Model& model);
+bool initialize(const char* device, const Operation& operation, const Model& model);
 OutputPort updateDataPtr();
+std::string getNodeName();
+std::vector<std::string> getInputName();
+int getAxis();
 
 }
 }  // namespace nnhal

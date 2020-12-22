@@ -132,8 +132,8 @@ inline OutputPort operator*(const IRBlob::Ptr &weights, const OutputPort &op) {
         return true;
     }
 
-    bool initialize(const std::string& device, const Operation& operation,  const Model& model){
-        if (device.compare("CPU")){
+    bool initialize(const char* device, const Operation& operation,  const Model& model){
+        if (strcmp(device, "CPU") == 0){
             VLOG(L1, "OperationType::FULLY_CONNECTED");
             dumpOperationParam(operation);
             sp<CpuPreparedModel> PreparedModelObj;
@@ -198,7 +198,6 @@ inline OutputPort operator*(const IRBlob::Ptr &weights, const OutputPort &op) {
 
             auto out = weights * input + bias;
 
-            // mPorts[operation.outputs[0]] = handleFusion(out, PARAM_I32(3));
             fcDataPtr = handleFusion(out, PreparedModelObj->ParseOperationInput<int32_t>(model, operation, 3));
 
             VLOG(L1, "----------------------------------------------");
@@ -209,7 +208,7 @@ inline OutputPort operator*(const IRBlob::Ptr &weights, const OutputPort &op) {
 
             return true;
 
-        } else if (device.compare("GNA")){
+        } else if (strcmp(device, "GNA") == 0){
             VLOG(L1, "OperationType::FULLY_CONNECTED");
 
             return true;

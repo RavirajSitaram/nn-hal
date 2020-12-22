@@ -25,6 +25,9 @@ namespace nnhal {
 namespace depthconv{
 
 OutputPort depthconvDataPtr;
+GenConvParams genConvPrms;
+std::string nodeName;
+std::string inputName;
 
 static IRLayer create(const OutputPort &src) {
     std::string name = "Conv-";  // todo: make it unique
@@ -259,8 +262,8 @@ bool validate(const Operation& operation, const Model& model){
     return true;
 }
 
-bool initialize(const std::string& device, const Operation& operation, const Model& model){
-    if (device.compare("CPU")){
+bool initialize(const char* device, const Operation& operation, const Model& model){
+    if (strcmp(device, "CPU") == 0){
         VLOG(L1, "OperationType::DEPTHWISE_CONV_2D");
         dumpOperationParam(operation);
         sp<CpuPreparedModel> PreparedModelObj;
@@ -355,9 +358,11 @@ bool initialize(const std::string& device, const Operation& operation, const Mod
 
         prms.biases = static_cast<IRBlob::Ptr>(bias);
         auto out = Convolution(input, prms);
-        GenConvParams genConvPrms;
+        // GenConvParams genConvPrms;
         ConvolutionParamsToGenConvParams(prms, genConvPrms, filter, bias);
-        PreparedModelObj->mCreateNgraph->addConvolution(out->getName(), input->getName(), genConvPrms);
+        nodeName = out->getName();
+        inputName = input->getName();
+        // PreparedModelObj->mCreateNgraph->addConvolution(out->getName(), input->getName(), genConvPrms);
 
         if (fusion_index < 0) {
             VLOG(L1, "invalid fusion index");
@@ -374,7 +379,7 @@ bool initialize(const std::string& device, const Operation& operation, const Mod
 
         return true;
     
-    } else if (device.compare("GNA")){
+    } else if (strcmp(device, "GNA") == 0){
         return false;
     } else {
         return false;
@@ -383,6 +388,18 @@ bool initialize(const std::string& device, const Operation& operation, const Mod
 
 OutputPort updateDataPtr() {
     return depthconvDataPtr;
+}
+
+std::string getNodeName(){
+    return nodeName;
+}
+
+std::string getInputName(){
+    return inputName;
+}
+
+GenConvParams getGenConvPrms(){
+    return genConvPrms;
 }
 
 }

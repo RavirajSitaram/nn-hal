@@ -48,6 +48,7 @@ bool CpuPreparedModel::initialize() {
         VLOG(L1, "initializeRunTimeOperandInfo failed.");
         return false;
     }
+    VLOG(L1, "initializeRunTimeOperandInfo success.");
 
     Model model = mModel;
 
@@ -55,70 +56,93 @@ bool CpuPreparedModel::initialize() {
         VLOG(L1, "get operation %d ready to add", operation.type);
         dumpOperation(operation);
         switch (operation.type) {
-            case OperationType::ADD:{
-                success = add::initialize(mTargetDevice, operation, model);
+            case OperationType::ADD: {
+                VLOG(L1, "Initializing ADD operation");
+                success = add::initialize(mTargetDevice.c_str(), operation, model);
                 mPorts[operation.outputs[0]] = add::updateDataPtr();
             } break;
-            case OperationType::MUL:{
-                success = mul::initialize(mTargetDevice, operation, model);
+            case OperationType::MUL: {
+                VLOG(L1, "Initializing MUL operation");
+                success = mul::initialize(mTargetDevice.c_str(), operation, model);
                 mPorts[operation.outputs[0]] = mul::updateDataPtr();
             } break;
-            case OperationType::CONCATENATION:{
-                success = concat::initialize(mTargetDevice, operation, model);
+            case OperationType::CONCATENATION: {
+                VLOG(L1, "Initializing CONCATENATION operation");
+                success = concat::initialize(mTargetDevice.c_str(), operation, model);
+                mCreateNgraph->addConcat(concat::getNodeName(), concat::getInputName(), concat::getAxis());
             } break;
-            case OperationType::FULLY_CONNECTED:{
-                success = fullyconnected::initialize(mTargetDevice, operation, model);
+            case OperationType::FULLY_CONNECTED: {
+                VLOG(L1, "Initializing FULLY_CONNECTED operation");
+                success = fullyconnected::initialize(mTargetDevice.c_str(), operation, model);
                 mPorts[operation.outputs[0]] = fullyconnected::updateDataPtr();
             } break;
-            case OperationType::AVERAGE_POOL_2D:{
-                success = avgpool::initialize(mTargetDevice, operation, model);
+            case OperationType::AVERAGE_POOL_2D: {
+                VLOG(L1, "Initializing AVERAGE_POOL_2D operation");
+                success = avgpool::initialize(mTargetDevice.c_str(), operation, model);
                 mPorts[operation.outputs[0]] = avgpool::updateDataPtr();
             } break;
-            case OperationType::MAX_POOL_2D:{
-                success = maxpool::initialize(mTargetDevice, operation, model);
+            case OperationType::MAX_POOL_2D: {
+                VLOG(L1, "Initializing MAX_POOL_2D operation");
+                success = maxpool::initialize(mTargetDevice.c_str(), operation, model);
                 mPorts[operation.outputs[0]] = maxpool::updateDataPtr();
             } break;
-            case OperationType::CONV_2D:{
-                success = convolution::initialize(mTargetDevice, operation, model);
+            case OperationType::CONV_2D: {
+                VLOG(L1, "Initializing CONV_2D operation");
+                success = convolution::initialize(mTargetDevice.c_str(), operation, model);
                 mPorts[operation.outputs[0]] = convolution::updateDataPtr();
+                GenConvParams gPrms = convolution::getGenConvPrms();
+                mCreateNgraph->addConvolution(convolution::getNodeName(), convolution::getInputName(), gPrms);
             } break;
-            case OperationType::DEPTHWISE_CONV_2D:{
-                success = depthconv::initialize(mTargetDevice, operation, model);
+            case OperationType::DEPTHWISE_CONV_2D: {
+                VLOG(L1, "Initializing DEPTHWISE_CONV_2D operation");
+                success = depthconv::initialize(mTargetDevice.c_str(), operation, model);
                 mPorts[operation.outputs[0]] = depthconv::updateDataPtr();
+                GenConvParams gPrms = depthconv::getGenConvPrms();
+                mCreateNgraph->addConvolution(depthconv::getNodeName(), depthconv::getInputName(), gPrms);
             } break;
-            case OperationType::L2_NORMALIZATION:{
-                success = l2normalization::initialize(mTargetDevice, operation, model);
+            case OperationType::L2_NORMALIZATION: {
+                VLOG(L1, "Initializing L2_NORMALIZATION operation");
+                success = l2normalization::initialize(mTargetDevice.c_str(), operation, model);
                 mPorts[operation.outputs[0]] = l2normalization::updateDataPtr();
             } break;
-            case OperationType::LOCAL_RESPONSE_NORMALIZATION:{
-                success = lrn::initialize(mTargetDevice, operation, model);
+            case OperationType::LOCAL_RESPONSE_NORMALIZATION: {
+                VLOG(L1, "Initializing LOCAL_RESPONSE_NORMALIZATION operation");
+                success = lrn::initialize(mTargetDevice.c_str(), operation, model);
                 mPorts[operation.outputs[0]] = lrn::updateDataPtr();
             } break;
-            case OperationType::RELU:{
-                success = relu::initialize(mTargetDevice, operation, model);
+            case OperationType::RELU: {
+                VLOG(L1, "Initializing RELU operation");
+                success = relu::initialize(mTargetDevice.c_str(), operation, model);
                 mPorts[operation.outputs[0]] = relu::updateDataPtr();
             } break;
-            case OperationType::RELU1:{
-                success = relu1::initialize(mTargetDevice, operation, model);
+            case OperationType::RELU1: {
+                VLOG(L1, "Initializing RELU1 operation");
+                success = relu1::initialize(mTargetDevice.c_str(), operation, model);
                 mPorts[operation.outputs[0]] = relu1::updateDataPtr();
             } break;
-            case OperationType::RELU6:{
-                success = relu6::initialize(mTargetDevice, operation, model);
+            case OperationType::RELU6: {
+                VLOG(L1, "Initializing RELU6 operation");
+                success = relu6::initialize(mTargetDevice.c_str(), operation, model);
                 mPorts[operation.outputs[0]] = relu6::updateDataPtr();
             } break;
-            case OperationType::LOGISTIC:{
-                success = logistic::initialize(mTargetDevice, operation, model);
+            case OperationType::LOGISTIC: {
+                VLOG(L1, "Initializing LOGISTIC operation");
+                success = logistic::initialize(mTargetDevice.c_str(), operation, model);
             } break;
-            case OperationType::SOFTMAX:{
-                success = softmax::initialize(mTargetDevice, operation, model);
+            case OperationType::SOFTMAX: {
+                VLOG(L1, "Initializing SOFTMAX operation");
+                success = softmax::initialize(mTargetDevice.c_str(), operation, model);
                 mPorts[operation.outputs[0]] = softmax::updateDataPtr();
             } break;
-            case OperationType::TANH:{
-                success = tanh::initialize(mTargetDevice, operation, model);
+            case OperationType::TANH: {
+                VLOG(L1, "Initializing TANH operation");
+                success = tanh::initialize(mTargetDevice.c_str(), operation, model);
             } break;
-            case OperationType::RESHAPE:{
-                success = reshape::initialize(mTargetDevice, operation, model);
+            case OperationType::RESHAPE: {
+                VLOG(L1, "Initializing RESHAPE operation");
+                success = reshape::initialize(mTargetDevice.c_str(), operation, model);
                 mPorts[operation.outputs[0]] = reshape::updateDataPtr();
+                mCreateNgraph->addReshape(reshape::getNodeName(), reshape::getInputName(), reshape::getShape());
             } break;
             default:
                 VLOG(L1, "unsupported operation %d", operation.type);

@@ -25,7 +25,7 @@ namespace nnhal {
 namespace lrn{
 
 bool validate(const Operation& operation, const Model& model);
-bool initialize(const std::string& device, const Operation& operation, const Model& model);
+bool initialize(const char* device, const Operation& operation, const Model& model);
 OutputPort updateDataPtr();
 
 }

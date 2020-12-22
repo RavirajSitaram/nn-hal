@@ -25,8 +25,11 @@ namespace nnhal {
 namespace reshape{
 
 bool validate(const Operation& operation, const Model& model);
-bool initialize(const std::string& device, const Operation& operation, const Model& model);
+bool initialize(const char* device, const Operation& operation, const Model& model);
 OutputPort updateDataPtr();
+std::string getNodeName();
+std::string getInputName();
+std::vector<size_t> getShape();
 
 OutputPort Reshape(const TensorDims &newDims, const OutputPort &src);
 

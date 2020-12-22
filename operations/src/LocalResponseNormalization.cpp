@@ -49,8 +49,8 @@ bool validate(const Operation& operation, const Model& model){
     return true;
 }
 
-bool initialize(const std::string& device, const Operation& operation, const Model& model){
-    if (device.compare("CPU")){
+bool initialize(const char* device, const Operation& operation, const Model& model){
+    if (strcmp(device, "CPU") == 0){
 
         VLOG(L1, "OperationType::LOCAL_RESPONSE_NORMALIZATION");
         sp<CpuPreparedModel> PreparedModelObj;
@@ -61,7 +61,7 @@ bool initialize(const std::string& device, const Operation& operation, const Mod
         float k = PreparedModelObj->ParseOperationInput<float>(model, operation, 2);
         lrnDataPtr = LRN(PreparedModelObj->getPort(operation.inputs[0]), alpha, beta, size, false, k);
         return true;
-    } else if (device.compare("GNA")){
+    } else if (strcmp(device, "GNA") == 0){
         return false;
     } else {
         return false;
