@@ -269,10 +269,11 @@ bool initialize(const char* device, const Operation& operation, const Model mode
     if (strcmp(device, "CPU") == 0){
         VLOG(L1, "Initializing OperationType::CONV_2D, inside cpu");
         dumpOperationParam(operation);
+        // sp<BasePreparedModel> PreparedModelObj1;
         sp<CpuPreparedModel> PreparedModelObj;
         uint32_t mPadreq;
 
-        auto input = PreparedModelObj->getPort(operation.inputs[OP_INPUT_IDX_CONV]);
+        auto input = PreparedModelObj->BasePreparedModel::getPort(operation.inputs[OP_INPUT_IDX_CONV]);
         auto filter = PreparedModelObj->GetConstOperandAsTensor(operation.inputs[OP_FILTER_IDX_CONV],
                                             OP_FILTER_IDX_CONV);  // OIHW
         auto bias = PreparedModelObj->GetConstOperandAsTensor(operation.inputs[OP_BIAS_IDX_CONV], OP_BIAS_IDX_CONV);
@@ -306,14 +307,14 @@ bool initialize(const char* device, const Operation& operation, const Model mode
             VLOG(L1, "Explicit padding requested");
             mPadreq = EXPL_PAD;
             prms.padType = "explicit";
-            prms.pad_start.x = PreparedModelObj->ParseOperationInput<int32_t>(model, operation, OP_PADL_IDX_CONV);
-            prms.pad_start.y = PreparedModelObj->ParseOperationInput<int32_t>(model, operation, OP_PADH_IDX_CONV);
+            prms.pad_start.x = PreparedModelObj->BasePreparedModel::ParseOperationInput<int32_t>(model, operation, OP_PADL_IDX_CONV);
+            prms.pad_start.y = PreparedModelObj->BasePreparedModel::ParseOperationInput<int32_t>(model, operation, OP_PADH_IDX_CONV);
             CHECK_OPERAND_2D(prms.pad_start, OP_PADL_IDX_CONV, OP_PADH_IDX_CONV);
-            prms.pad_end.x = PreparedModelObj->ParseOperationInput<int32_t>(model, operation, OP_PADR_IDX_CONV);
-            prms.pad_end.y = PreparedModelObj->ParseOperationInput<int32_t>(model, operation, OP_PADW_IDX_CONV);
+            prms.pad_end.x = PreparedModelObj->BasePreparedModel::ParseOperationInput<int32_t>(model, operation, OP_PADR_IDX_CONV);
+            prms.pad_end.y = PreparedModelObj->BasePreparedModel::ParseOperationInput<int32_t>(model, operation, OP_PADW_IDX_CONV);
             CHECK_OPERAND_2D(prms.pad_end, OP_PADR_IDX_CONV, OP_PADW_IDX_CONV);
-            prms.stride.x = PreparedModelObj->ParseOperationInput<int32_t>(model, operation, OP_STRD_WD_IDX_EXPL_CONV);
-            prms.stride.y = PreparedModelObj->ParseOperationInput<int32_t>(model, operation, OP_STRD_HT_IDX_EXPL_CONV);
+            prms.stride.x = PreparedModelObj->BasePreparedModel::ParseOperationInput<int32_t>(model, operation, OP_STRD_WD_IDX_EXPL_CONV);
+            prms.stride.y = PreparedModelObj->BasePreparedModel::ParseOperationInput<int32_t>(model, operation, OP_STRD_HT_IDX_EXPL_CONV);
             CHECK_OPERAND_2D(prms.stride, OP_STRD_WD_IDX_EXPL_CONV, OP_STRD_HT_IDX_EXPL_CONV);
             prms.kernel = {filter_width, filter_height};
             prms.num_output_planes = filter_out;  // depth out
@@ -321,9 +322,9 @@ bool initialize(const char* device, const Operation& operation, const Model mode
         } else if (operation.inputs.size() == IMPL_PAD_PARAMS_CONV) {  // PAD SAME
             VLOG(L1, "Implicit padding requested");
             mPadreq = IMPL_PAD;
-            const auto pad_type = PreparedModelObj->ParseOperationInput<int32_t>(model, operation, 3);  // padding_implicit
-            int stride_width = PreparedModelObj->ParseOperationInput<int32_t>(model, operation, 4);
-            int stride_height = PreparedModelObj->ParseOperationInput<int32_t>(model, operation, 5);
+            const auto pad_type = PreparedModelObj->BasePreparedModel::ParseOperationInput<int32_t>(model, operation, 3);  // padding_implicit
+            int stride_width = PreparedModelObj->BasePreparedModel::ParseOperationInput<int32_t>(model, operation, 4);
+            int stride_height = PreparedModelObj->BasePreparedModel::ParseOperationInput<int32_t>(model, operation, 5);
             int padding_left, padding_right;
             int padding_top, padding_bottom;
             if (pad_type == kPaddingSame) {
@@ -384,7 +385,7 @@ bool initialize(const char* device, const Operation& operation, const Model mode
             VLOG(L1, "invalid fusion index");
             nnAssert(false);
         }
-        auto acv_func = PreparedModelObj->ParseOperationInput<int32_t>(model, operation, fusion_index);
+        auto acv_func = PreparedModelObj->BasePreparedModel::ParseOperationInput<int32_t>(model, operation, fusion_index);
         if (acv_func < 0) {
             VLOG(L1, "Invalid Activation function passed,aborting!!");
             return false;

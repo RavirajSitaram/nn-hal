@@ -135,10 +135,6 @@ class BasePreparedModel : public V1_2::IPreparedModel{
 
         virtual ~BasePreparedModel() { deinitialize(); }
 
-        static bool isOperationSupported(const Operation& operation, const Model& model);
-
-        virtual bool initialize();
-
         Return<ErrorStatus> execute(const Request& request,
                                 const sp<V1_0::IExecutionCallback>& callback) override;
         Return<ErrorStatus> execute_1_2(const Request& request, MeasureTiming measure,
@@ -151,13 +147,12 @@ class BasePreparedModel : public V1_2::IPreparedModel{
             const MQDescriptorSync<V1_2::FmqResultDatum>& resultChannel,
             configureExecutionBurst_cb cb) override;
 
+        static bool isOperationSupported(const Operation& operation, const Model& model);
+        virtual bool initialize();
+        bool isConst(int index);
         OutputPort getPort(int index);
-
         template <typename T>
         T ParseOperationInput(const Model& model, const Operation& operation, uint32_t index);
-
-        bool isConst(int index);
-
         template <typename T>
         std::vector<T> GetConstVecOperand(const Model& model, uint32_t index); //for reshape
 
