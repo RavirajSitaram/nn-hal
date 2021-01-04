@@ -148,7 +148,7 @@ class BasePreparedModel : public V1_2::IPreparedModel{
             configureExecutionBurst_cb cb) override;
 
         static bool isOperationSupported(const Operation& operation, const Model& model);
-        virtual bool initialize();
+        virtual bool initialize(const Model& model);
         bool isConst(int index);
         OutputPort getPort(int index);
         template <typename T>

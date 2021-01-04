@@ -272,7 +272,7 @@ bool BasePreparedModel::isOperationSupported(const Operation& operation, const M
     return true;
 }
 
-bool BasePreparedModel::initialize() {
+bool BasePreparedModel::initialize(const Model& model) {
     VLOG(L1, "initialize");
     return true;
 }

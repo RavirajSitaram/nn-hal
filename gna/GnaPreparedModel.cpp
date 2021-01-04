@@ -23,7 +23,7 @@ void GnaPreparedModel::deinitialize() {
     VLOG(L1, "free engine");
 }
 
-bool GnaPreparedModel::initialize() {
+bool GnaPreparedModel::initialize(const Model& model) {
     VLOG(L1, "initialize");
     bool success = false;
 
@@ -48,8 +48,6 @@ bool GnaPreparedModel::initialize() {
         VLOG(L1, "initializeRunTimeOperandInfo failed.");
         return false;
     }
-
-    Model model = mModel;
 
     for (const auto& operation : mModel.operations) {
         VLOG(L1, "get operation %d ready to add", operation.type);

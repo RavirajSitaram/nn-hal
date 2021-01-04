@@ -242,7 +242,7 @@ Return<ErrorStatus> Driver::prepareModel_1_2(const Model& model, ExecutionPrefer
         return ErrorStatus::INVALID_ARGUMENT;
     }
 
-    if (!driverPreparedModel->initialize()) {
+    if (!driverPreparedModel->initialize(model)) {
         ALOGI("failed to initialize preparedmodel");
         callback->notify(ErrorStatus::INVALID_ARGUMENT, nullptr);
         return ErrorStatus::NONE;

@@ -264,7 +264,7 @@ bool validate(const Operation& operation, const Model& model){
     return true;
 }
 
-bool initialize(const char* device, const Operation& operation, const Model model){
+bool initialize(const char* device, const Operation& operation, const Model& model){
     VLOG(L1, "Initializing OperationType::CONV_2D");
     if (strcmp(device, "CPU") == 0){
         VLOG(L1, "Initializing OperationType::CONV_2D, inside cpu");

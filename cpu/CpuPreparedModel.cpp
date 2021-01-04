@@ -23,7 +23,7 @@ void CpuPreparedModel::deinitialize() {
     VLOG(L1, "free engine");
 }
 
-bool CpuPreparedModel::initialize() {
+bool CpuPreparedModel::initialize(const Model& model) {
     VLOG(L1, "initialize");
     bool success = false;
 
@@ -49,8 +49,6 @@ bool CpuPreparedModel::initialize() {
         return false;
     }
     VLOG(L1, "initializeRunTimeOperandInfo success.");
-
-    Model model = mModel;
 
     for (const auto& operation : mModel.operations) {
         VLOG(L1, "get operation %d ready to add", operation.type);
