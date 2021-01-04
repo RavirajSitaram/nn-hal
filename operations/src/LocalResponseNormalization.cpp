@@ -59,7 +59,7 @@ bool initialize(const char* device, const Operation& operation, const Model& mod
         float beta = PreparedModelObj->ParseOperationInput<float>(model, operation, 4);
         int size = PreparedModelObj->ParseOperationInput<int32_t>(model, operation, 1);
         float k = PreparedModelObj->ParseOperationInput<float>(model, operation, 2);
-        lrnDataPtr = LRN(PreparedModelObj->getPort(operation.inputs[0]), alpha, beta, size, false, k);
+        lrnDataPtr = LRN(PreparedModelObj->getPort(operation.inputs[0], model), alpha, beta, size, false, k);
         return true;
     } else if (strcmp(device, "GNA") == 0){
         return false;

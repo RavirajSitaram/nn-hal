@@ -273,10 +273,10 @@ bool initialize(const char* device, const Operation& operation, const Model& mod
         sp<CpuPreparedModel> PreparedModelObj;
         uint32_t mPadreq;
 
-        auto input = PreparedModelObj->BasePreparedModel::getPort(operation.inputs[OP_INPUT_IDX_CONV]);
+        auto input = PreparedModelObj->BasePreparedModel::getPort(operation.inputs[OP_INPUT_IDX_CONV], model);
         auto filter = PreparedModelObj->GetConstOperandAsTensor(operation.inputs[OP_FILTER_IDX_CONV],
-                                            OP_FILTER_IDX_CONV);  // OIHW
-        auto bias = PreparedModelObj->GetConstOperandAsTensor(operation.inputs[OP_BIAS_IDX_CONV], OP_BIAS_IDX_CONV);
+                                            OP_FILTER_IDX_CONV, model);  // OIHW
+        auto bias = PreparedModelObj->GetConstOperandAsTensor(operation.inputs[OP_BIAS_IDX_CONV], OP_BIAS_IDX_CONV, model);
         if (bias == nullptr) {
             VLOG(L1, "NNERR:bias blob is NULL");
             return false;

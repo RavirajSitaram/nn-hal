@@ -60,8 +60,8 @@ bool initialize(const char* device, const Operation& operation, const Model& mod
     VLOG(L1, "OperationType::ADD");
     OutputPort out;
     sp<CpuPreparedModel> PreparedModelObj;
-    bool isIn0Const = PreparedModelObj->isConst(operation.inputs[OP_INPUT_IDX_CONV]);
-    bool isIn1Const = PreparedModelObj->isConst(operation.inputs[OP_FILTER_IDX_CONV]);
+    bool isIn0Const = PreparedModelObj->isConst(operation.inputs[OP_INPUT_IDX_CONV], model);
+    bool isIn1Const = PreparedModelObj->isConst(operation.inputs[OP_FILTER_IDX_CONV], model);
     VLOG(L1, "isIn0Const = %d isIn1Const = %d \n", isIn0Const, isIn1Const);
     if (isIn0Const || isIn1Const) {
         if (isIn0Const && isIn1Const) {
@@ -71,15 +71,15 @@ bool initialize(const char* device, const Operation& operation, const Model& mod
         // this will use ScaleShift
         if (isIn0Const)  // if op.inputs[OP_FILTER_IDX] is a Model input
             out = AddConst(
-                PreparedModelObj->mNet, PreparedModelObj->getPort(operation.inputs[OP_FILTER_IDX_CONV]),
-                PreparedModelObj->GetConstOperandAsTensor(operation.inputs[OP_INPUT_IDX_CONV], OP_INPUT_IDX_CONV));
+                PreparedModelObj->mNet, PreparedModelObj->getPort(operation.inputs[OP_FILTER_IDX_CONV], model),
+                PreparedModelObj->GetConstOperandAsTensor(operation.inputs[OP_INPUT_IDX_CONV], OP_INPUT_IDX_CONV, model));
         else  // isIn1Const is const //op.inputs[OP_INPUT_IDX_CONV] is a Model input
             out = AddConst(
-                PreparedModelObj->mNet, PreparedModelObj->getPort(operation.inputs[OP_INPUT_IDX_CONV]),
-                PreparedModelObj->GetConstOperandAsTensor(operation.inputs[OP_FILTER_IDX_CONV], OP_FILTER_IDX_CONV));
+                PreparedModelObj->mNet, PreparedModelObj->getPort(operation.inputs[OP_INPUT_IDX_CONV], model),
+                PreparedModelObj->GetConstOperandAsTensor(operation.inputs[OP_FILTER_IDX_CONV], OP_FILTER_IDX_CONV, model));
     } else {  // both inputs[OP_INPUT_IDX_CONV] & inputs[OP_FILTER_IDX_CONV] aremodel inputs
-        out = PreparedModelObj->getPort(operation.inputs[OP_INPUT_IDX_CONV]) +
-              PreparedModelObj->getPort(operation.inputs[OP_FILTER_IDX_CONV]);
+        out = PreparedModelObj->getPort(operation.inputs[OP_INPUT_IDX_CONV], model) +
+              PreparedModelObj->getPort(operation.inputs[OP_FILTER_IDX_CONV], model);
     }
     // check fusion
     VLOG(L1, "check fusion parameter = %d\n",PreparedModelObj->ParseOperationInput<int32_t>(model, operation, 2));

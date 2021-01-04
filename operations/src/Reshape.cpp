@@ -110,7 +110,7 @@ bool initialize(const char* device, const Operation& operation, const Model& mod
         VLOG(L1, "OperationType::RESHAPE");
         sp<CpuPreparedModel> PreparedModelObj;
 
-        auto input = PreparedModelObj->getPort(operation.inputs[0]);
+        auto input = PreparedModelObj->getPort(operation.inputs[0], model);
         auto inDims = input->getTensorDesc().getDims();
 
         auto outDims = toDims(PreparedModelObj->GetConstVecOperand<uint32_t>(model, operation.inputs[1]));

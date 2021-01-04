@@ -72,7 +72,7 @@ bool initialize(const char* device, const Operation& operation, const Model& mod
         VLOG(L1, "OperationType::SOFTMAX");
         sp<CpuPreparedModel> PreparedModelObj;
 
-        auto input = PreparedModelObj->getPort(operation.inputs[0]);
+        auto input = PreparedModelObj->getPort(operation.inputs[0], model);
 
         softmaxDataPtr = Softmax(input);
         float beta /*scale*/ = PreparedModelObj->ParseOperationInput<float>(model, operation, 1);

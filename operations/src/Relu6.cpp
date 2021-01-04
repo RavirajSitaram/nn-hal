@@ -63,7 +63,7 @@ bool validate(const Operation& operation, const Model& model){
 bool initialize(const char* device, const Operation& operation, const Model& model){
     if (strcmp(device, "CPU") == 0){
         sp<CpuPreparedModel> PreparedModelObj;
-        relu6DataPtr = Clamp(PreparedModelObj->getPort(operation.inputs[0]), -1, 6);
+        relu6DataPtr = Clamp(PreparedModelObj->getPort(operation.inputs[0], model), -1, 6);
         return true;
     } else if (strcmp(device, "GNA") == 0){
         return false;

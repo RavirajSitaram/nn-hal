@@ -138,10 +138,10 @@ inline OutputPort operator*(const IRBlob::Ptr &weights, const OutputPort &op) {
             dumpOperationParam(operation);
             sp<CpuPreparedModel> PreparedModelObj;
 
-            auto input = PreparedModelObj->getPort(operation.inputs[OP_INPUT_IDX_CONV]);
+            auto input = PreparedModelObj->getPort(operation.inputs[OP_INPUT_IDX_CONV], model);
             auto weights =
-                PreparedModelObj->GetConstOperandAsTensor(operation.inputs[OP_FILTER_IDX_CONV], OP_FILTER_IDX_CONV);
-            auto bias = PreparedModelObj->GetConstOperandAsTensor(operation.inputs[OP_BIAS_IDX_CONV], OP_BIAS_IDX_CONV);
+                PreparedModelObj->GetConstOperandAsTensor(operation.inputs[OP_FILTER_IDX_CONV], OP_FILTER_IDX_CONV, model);
+            auto bias = PreparedModelObj->GetConstOperandAsTensor(operation.inputs[OP_BIAS_IDX_CONV], OP_BIAS_IDX_CONV, model);
 
             auto inputDims = input->getTensorDesc().getDims();
             for (auto i = 0; i < inputDims.size(); i++) VLOG(L1, "input dims[%d] = %d ", i, inputDims[i]);

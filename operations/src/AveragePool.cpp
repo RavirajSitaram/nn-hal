@@ -183,7 +183,7 @@ bool initialize(const char* device, const Operation& operation, const Model& mod
          VLOG(L1, "OperationType::AVERAGE_POOL_2D");
          sp<CpuPreparedModel> PreparedModelObj;
     
-    auto input = PreparedModelObj->getPort(operation.inputs[0]);
+    auto input = PreparedModelObj->getPort(operation.inputs[0], model);
     const auto indims = input->getTensorDesc().getDims();
 
     Point2D pad_start = {0, 0};

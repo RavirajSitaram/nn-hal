@@ -269,11 +269,11 @@ bool initialize(const char* device, const Operation& operation, const Model& mod
         sp<CpuPreparedModel> PreparedModelObj;
         uint32_t mPadreq;
 
-        auto input = PreparedModelObj->getPort(operation.inputs[OP_INPUT_IDX_CONV]);
+        auto input = PreparedModelObj->getPort(operation.inputs[OP_INPUT_IDX_CONV], model);
         auto filter = PreparedModelObj->GetConstWeightsOperandAsTensor(
-            operation.inputs[OP_FILTER_IDX_CONV]);  //[depth_out, 1, filter_height,
+            operation.inputs[OP_FILTER_IDX_CONV], model);  //[depth_out, 1, filter_height,
                                                     // filter_width] OIHW
-        auto bias = PreparedModelObj->GetConstOperandAsTensor(operation.inputs[OP_BIAS_IDX_CONV], OP_BIAS_IDX_CONV);
+        auto bias = PreparedModelObj->GetConstOperandAsTensor(operation.inputs[OP_BIAS_IDX_CONV], OP_BIAS_IDX_CONV, model);
 
         const auto inputDims = input->getTensorDesc().getDims();
         const auto filterDims = filter->getTensorDesc().getDims();

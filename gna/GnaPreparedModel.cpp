@@ -91,12 +91,12 @@ bool GnaPreparedModel::initialize(const Model& model) {
 
 }
 
-IRBlob::Ptr GnaPreparedModel::GetConstWeightsOperandAsTensor(uint32_t index)
+IRBlob::Ptr GnaPreparedModel::GetConstWeightsOperandAsTensor(uint32_t index, const Model& model)
 {
-    dumpOperand(index, mModel);
-    const auto op = mModel.operands[index];
+    dumpOperand(index, model);
+    const auto op = model.operands[index];
     uint32_t len;
-    const uint8_t *buf = GetOperandMemory(mModel, index, len);
+    const uint8_t *buf = GetOperandMemory(model, index, len);
 
     if (op.type == OperandType::TENSOR_FLOAT32 || op.type == OperandType::FLOAT32) {
         if (buf == nullptr)
@@ -178,10 +178,10 @@ IRBlob::Ptr GnaPreparedModel::GetConstWeightsOperandAsTensor(uint32_t index)
     return nullptr;
 }
 
-IRBlob::Ptr GnaPreparedModel::GetConstOperandAsTensor(int operand_index, int operation_idx)
+IRBlob::Ptr GnaPreparedModel::GetConstOperandAsTensor(int operand_index, int operation_idx, const Model& model)
 {
-    dumpOperand(operand_index, mModel);
-    const auto op = mModel.operands[operand_index];
+    dumpOperand(operand_index, model);
+    const auto op = model.operands[operand_index];
     uint32_t len;
     const uint8_t *buf = GetOperandMemory(mModel, operand_index, len);
 

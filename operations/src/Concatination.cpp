@@ -61,7 +61,7 @@ int axisPrms;
             std::vector<OutputPort> inputs;
             const auto op = model.operands[operation.inputs[0]];
             sp<CpuPreparedModel> PreparedModelObj;
-            auto input = PreparedModelObj->getPort(operation.inputs[0]);
+            auto input = PreparedModelObj->getPort(operation.inputs[0], model);
             auto inDims = input->getTensorDesc().getDims();
             if (op.dimensions.size() == 4) {
                 std::vector<uint32_t> axisMap = {2, 3, 1};  // NCHW = axisMap[NHWC]
@@ -73,7 +73,7 @@ int axisPrms;
             VLOG(L1, "shape of output tensor axis %d inDims size %d, op_dimensionsize %d", axis,
                 inDims.size(), op.dimensions.size());
 
-            for (int i = 0; i < n; i++) inputs.push_back(PreparedModelObj->getPort(operation.inputs[i]));
+            for (int i = 0; i < n; i++) inputs.push_back(PreparedModelObj->getPort(operation.inputs[i], model));
             auto out = Concat(inputs, axis);
             std::vector<std::string> inputNames;
             for (int i = 0; i < inputs.size(); ++i) {

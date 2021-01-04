@@ -420,10 +420,10 @@ std::vector<T> BasePreparedModel::GetConstVecFromBuffer(const uint8_t* buf, uint
     return ret;
 }
 
-bool BasePreparedModel::isConst(int index) {
+bool BasePreparedModel::isConst(int index, const Model& model) {
     VLOG(L1, "---------------------------------------------");
     VLOG(L1, "Operand index: %d", index);
-    const auto op = mModel.operands[index];
+    const auto op = model.operands[index];
     VLOG(L1, " %s", toString(op).c_str());
     bool ret = (op.lifetime == OperandLifeTime::CONSTANT_COPY ||
                 op.lifetime == OperandLifeTime::CONSTANT_REFERENCE);
@@ -432,13 +432,13 @@ bool BasePreparedModel::isConst(int index) {
     return ret;
 }
 
-OutputPort BasePreparedModel::getPort(int index) {
+OutputPort BasePreparedModel::getPort(int index, const Model& model) {
     VLOG(L1, "getPort\n");
-    if (isConst(index)) {
+    if (isConst(index, model)) {
         VLOG(L1, "index is a const!");
         nnAssert(false);
     }
-    const auto op = mModel.operands[index];
+    const auto op = model.operands[index];
     if (op.lifetime == OperandLifeTime::MODEL_INPUT) {
         VLOG(L1, "Model input operand\n");
         std::ostringstream operandName;
@@ -875,9 +875,9 @@ Return<ErrorStatus> BasePreparedModel::execute_1_2(const Request& request, Measu
     return executeBase(request, measure, callback);
 }
 
-IRBlob::Ptr BasePreparedModel::GetConstWeightsOperandAsTensor(uint32_t index) { return nullptr; }
+IRBlob::Ptr BasePreparedModel::GetConstWeightsOperandAsTensor(uint32_t index, const Model& model) { return nullptr; }
 
-IRBlob::Ptr BasePreparedModel::GetConstOperandAsTensor(int operand_idx, int operation_idx) {
+IRBlob::Ptr BasePreparedModel::GetConstOperandAsTensor(int operand_idx, int operation_idx, const Model& model) {
     return nullptr;
 }
 

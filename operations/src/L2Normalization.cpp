@@ -50,7 +50,7 @@ bool initialize(const char* device, const Operation& operation, const Model& mod
         */
         // mPorts[operation.outputs[0]] = L2Normalization(getPort(operation.inputs[0]), true, false);
         l2normDataPtr =
-            L2Normalization(PreparedModelObj->getPort(operation.inputs[0]), false, false);  // passing accross false
+            L2Normalization(PreparedModelObj->getPort(operation.inputs[0], model), false, false);  // passing accross false
         return true;
     } else if (strcmp(device, "GNA") == 0){
         return false;

@@ -149,8 +149,8 @@ class BasePreparedModel : public V1_2::IPreparedModel{
 
         static bool isOperationSupported(const Operation& operation, const Model& model);
         virtual bool initialize(const Model& model);
-        bool isConst(int index);
-        OutputPort getPort(int index);
+        bool isConst(int index, const Model& model);
+        OutputPort getPort(int index, const Model& model);
         template <typename T>
         T ParseOperationInput(const Model& model, const Operation& operation, uint32_t index);
         template <typename T>
@@ -171,8 +171,8 @@ protected:
         template <typename T>
         std::vector<T> GetConstVecFromBuffer(const uint8_t* buf, uint32_t len);
         const uint8_t* GetOperandMemory(const Model& model, uint32_t index, uint32_t& len_out);
-        virtual Blob::Ptr GetConstWeightsOperandAsTensor(uint32_t index);
-        virtual Blob::Ptr GetConstOperandAsTensor(int operand_index, int operation_idx);
+        virtual Blob::Ptr GetConstWeightsOperandAsTensor(uint32_t index, const Model& model);
+        virtual Blob::Ptr GetConstOperandAsTensor(int operand_index, int operation_idx, const Model& model);
         virtual Blob::Ptr GetInOutOperandAsBlob(RunTimeOperandInfo& op, const uint8_t* buf,
                                             uint32_t& len);
         template <typename T_IExecutionCallback>

@@ -51,7 +51,7 @@ bool initialize(const char* device, const Operation& operation, const Model& mod
         VLOG(L1, "OperationType::RELU");
         // mPorts[operation.outputs[0]] = ReLU(getPort(operation.inputs[0]));
         sp<CpuPreparedModel> PreparedModelObj;
-        reluDataPtr = ReLU(PreparedModelObj->getPort(operation.inputs[0]));
+        reluDataPtr = ReLU(PreparedModelObj->getPort(operation.inputs[0], model));
     } else if (strcmp(device, "GNA") == 0){
         return false;
     } else {

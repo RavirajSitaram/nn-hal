@@ -56,7 +56,7 @@ bool initialize(const char* device, const Operation& operation, const Model& mod
         VLOG(L1, "OperationType::MUL");
         sp<CpuPreparedModel> PreparedModelObj;
         mulDataPtr =
-            handleFusion(PreparedModelObj->getPort(operation.inputs[0]) * PreparedModelObj->getPort(operation.inputs[1]), PreparedModelObj->ParseOperationInput<int32_t>(model, operation, 2));
+            handleFusion(PreparedModelObj->getPort(operation.inputs[0], model) * PreparedModelObj->getPort(operation.inputs[1], model), PreparedModelObj->ParseOperationInput<int32_t>(model, operation, 2));
         return true;
     } else if (strcmp(device, "GNA") == 0){
         return false;

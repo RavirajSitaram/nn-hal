@@ -169,11 +169,11 @@ bool CpuPreparedModel::initialize(const Model& model) {
     return true;
 }
 
-IRBlob::Ptr CpuPreparedModel::GetConstWeightsOperandAsTensor(uint32_t index) {
-    dumpOperand(index, mModel);
-    const auto op = mModel.operands[index];
+IRBlob::Ptr CpuPreparedModel::GetConstWeightsOperandAsTensor(uint32_t index, const Model& model) {
+    dumpOperand(index, model);
+    const auto op = model.operands[index];
     uint32_t len;
-    const uint8_t* buf = GetOperandMemory(mModel, index, len);
+    const uint8_t* buf = GetOperandMemory(model, index, len);
     VLOG(L1, "CpuPreparedModel:: Operand: index: %d, len: %d, buf: %p", index, len, buf);
     if (op.type == OperandType::TENSOR_FLOAT32 || op.type == OperandType::FLOAT32) {
         vec<unsigned int> order;
@@ -257,9 +257,9 @@ IRBlob::Ptr CpuPreparedModel::GetConstWeightsOperandAsTensor(uint32_t index) {
     return nullptr;
 }
 
-IRBlob::Ptr CpuPreparedModel::GetConstOperandAsTensor(int operand_idx, int operation_idx) {
-    dumpOperand(operand_idx, mModel);
-    const auto op = mModel.operands[operand_idx];
+IRBlob::Ptr CpuPreparedModel::GetConstOperandAsTensor(int operand_idx, int operation_idx, const Model& model) {
+    dumpOperand(operand_idx, model);
+    const auto op = model.operands[operand_idx];
     uint32_t len;
 
     const uint8_t* buf = GetOperandMemory(mModel, operand_idx, len);
