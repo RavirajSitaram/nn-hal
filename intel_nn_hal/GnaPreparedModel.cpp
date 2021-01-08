@@ -442,6 +442,10 @@ void GnaPreparedModel::asyncExecute(const V1_0_Request& request, MeasureTiming m
         runtimeInfo.update();
     }
 
+    for (auto runtimeInfo : requestPoolInfos) {
+        runtimeInfo.unmap_mem();
+    }
+
     if (measure == MeasureTiming::YES) {
         driverEnd = now();
         Timing timing = {.timeOnDevice = uint64_t(microsecondsDuration(deviceEnd, deviceStart)),
@@ -451,7 +455,7 @@ void GnaPreparedModel::asyncExecute(const V1_0_Request& request, MeasureTiming m
     } else {
         VLOG(L1, "MeasureTiming - No. Returning with no error");
         cb->notify(V1_0_ErrorStatus::NONE);
-    }
+    }   
 }
 
 // TODO: call the same asyncExecute function as above
