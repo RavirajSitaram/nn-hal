@@ -96,6 +96,7 @@ inline void operator>>(const InferenceEngine::CNNLayerPtr &lhs,
     lhs->outData[0] >> rhs;
 }
 
+#if 0
 template <typename T>
 IRBlob::Ptr readBlobFromFile(const std::string &file) {
     auto fs = FileUtils::fileSize(file);
@@ -117,6 +118,7 @@ IRBlob::Ptr readBlobFromFile(const std::string &file, const TensorDims &dims,
     data->Reshape(dims, l);
     return data;
 }
+#endif
 
 }  // namespace nnhal
 }  // namespace neuralnetworks

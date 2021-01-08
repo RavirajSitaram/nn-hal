@@ -20,7 +20,6 @@
 #include <android/hardware/neuralnetworks/1.2/IPreparedModel.h>
 #include <android/hardware/neuralnetworks/1.2/types.h>
 #include <android/hidl/memory/1.0/IMemory.h>
-#include <hardware/hardware.h>
 #include <hidlmemory/mapping.h>
 #include <sys/mman.h>
 #include <fstream>

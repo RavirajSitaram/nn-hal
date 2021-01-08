@@ -24,7 +24,6 @@
 #define IE_LEGACY
 
 #include <ie_plugin_config.hpp>
-#include <ie_plugin_dispatcher.hpp>
 #include <ie_plugin_ptr.hpp>
 #include <inference_engine.hpp>
 #include "IRDocument.h"
@@ -51,7 +50,7 @@
 #endif
 
 #ifdef USE_NGRAPH
-#include <cutils/properties.h>
+//#include <cutils/properties.h>
 #endif
 
 using namespace InferenceEngine::details;
@@ -122,11 +121,13 @@ static void setConfig(std::map<std::string, std::string> &config) {
     // VPU_CONFIG_VALUE(NHWC);
 }
 
+#ifdef __ANDROID__
 #ifdef USE_NGRAPH
 static bool isNgraphPropSet() {
     const char ngIrProp[] = "vendor.nn.hal.ngraph";
     return property_get_bool(ngIrProp, false);
 }
+#endif
 #endif
 
 class ExecuteNetwork {
@@ -144,15 +145,22 @@ class ExecuteNetwork {
     InferRequest inferRequest;
     ResponseDesc resp;
 #ifdef USE_NGRAPH
+#ifdef __ANDROID__
     bool mNgraphProp = false;
+#else
+    bool mNgraphProp = true;
 #endif
+#endif
+
 
 public:
     ExecuteNetwork() : network(nullptr) {}
 #ifdef USE_NGRAPH
     ExecuteNetwork(CNNNetwork ngraphNetwork, IRDocument &doc, std::string target = "CPU")
         : network(nullptr) {
+#ifdef __ANDROID__
         mNgraphProp = isNgraphPropSet();
+#endif
 #else
     ExecuteNetwork(IRDocument &doc, std::string target = "CPU") : network(nullptr) {
 #endif

@@ -22,7 +22,9 @@
 #include <thread>
 #include "ValidateHal.h"
 
+#ifdef __ANDROID__
 #include <cutils/properties.h>
+#endif
 
 #define DISABLE_ALL_QUANT
 #define LOG_TAG "BasePreparedModel"

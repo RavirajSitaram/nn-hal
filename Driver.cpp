@@ -26,6 +26,7 @@
 #include "ValidateHal.h"
 
 // sample gRPC client connection headers
+#ifdef __ANDROID__
 #include <grpcpp/grpcpp.h>
 #include <iostream>
 #include <memory>
@@ -39,6 +40,7 @@ using grpc::Status;
 using helloworld::Greeter;
 using helloworld::HelloReply;
 using helloworld::HelloRequest;
+#endif
 
 namespace android {
 namespace hardware {
@@ -220,11 +222,13 @@ Return<ErrorStatus> Driver::prepareModel_1_2(const Model& model, ExecutionPrefer
                                              const sp<V1_2::IPreparedModelCallback>& callback) {
     ALOGI("Entering %s", __func__);
 
+#ifdef __ANDROID__
     // sample gRPC client connection code
     GreeterClient greeter(
         grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials()));
     auto reply = greeter.SayHello("world");
     ALOGI("***********GRPC server response************* %s", reply.c_str());
+#endif
 
     if (callback.get() == nullptr) {
         ALOGI("invalid callback passed to prepareModel");

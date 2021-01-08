@@ -20,7 +20,6 @@
 #include <android/hardware/neuralnetworks/1.2/IPreparedModel.h>
 #include <android/hardware/neuralnetworks/1.2/types.h>
 #include <android/hidl/memory/1.0/IMemory.h>
-#include <hardware/hardware.h>
 #include <hidlmemory/mapping.h>
 #include <sys/mman.h>
 #include <fstream>
@@ -114,8 +113,10 @@ class BasePreparedModel : public V1_2::IPreparedModel{
           mNet("nnNet"),
           enginePtr(nullptr){
             g_layer_precision = InferenceEngine::Precision::FP16;
+#ifdef __ANDROID__
             mUseNgraph =
                 isNgraphPropSet();  // TODO:Should additionally check if all the ops are supported
+#endif
             mCreateNgraph = std::make_shared<CreateNgraph>();
         }
         BasePreparedModel(const std::string device, const Model& model)
@@ -129,7 +130,9 @@ class BasePreparedModel : public V1_2::IPreparedModel{
                 g_layer_precision = InferenceEngine::Precision::FP16;
             else
                 g_layer_precision = InferenceEngine::Precision::UNSPECIFIED;
+#ifdef __ANDROID__
             mUseNgraph = isNgraphPropSet();
+#endif
             mCreateNgraph = std::make_shared<CreateNgraph>();
         }
 

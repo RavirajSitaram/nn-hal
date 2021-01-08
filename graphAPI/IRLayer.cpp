@@ -42,7 +42,7 @@ int layer_name_count = 0;
 InferenceEngine::Precision g_layer_precision = InferenceEngine::Precision::UNSPECIFIED;
 
 void operator>>(const InferenceEngine::DataPtr &lhs, const InferenceEngine::CNNLayerPtr &rhs) {
-    lhs->getInputTo()[rhs->name] = rhs;
+    getInputTo(lhs)[rhs->name] = rhs;
     rhs->insData.push_back(lhs);
 }
 }  // namespace nnhal

@@ -1,0 +1,173 @@
+import("//common-mk/pkg_config.gni")
+
+group("all") {
+    deps = [
+        ":vendor-nn-hal",
+        ":intel_nnhal",
+    ]
+}
+
+shared_library("vendor-nn-hal") {
+  configs += [
+    ":target_defaults",
+  ]
+  deps = [
+    ":intel_nnhal",
+  ]
+  libs = [
+    "pthread",
+    "rt",
+    "tensorflowlite",
+    "textclassifier"
+  ]
+}
+
+config("target_defaults") {
+    cflags = [
+        "-Wall",
+        "-Wno-error",
+        "-Wextra",
+        "-Wno-unuse",
+    ]
+    cflags_cc = [
+        "-std=c++17",
+        "-Wno-inconsistent-missing-override",
+    ]
+    ldflags = [
+        "-Wl,--no-as-needed",
+        "-Wl,--no-undefined",
+    ]
+    include_dirs = [
+        "${sysroot}/usr/include/aosp",
+        "${sysroot}/usr/include/aosp/frameworks/ml/nn/common/include",
+        "${sysroot}/usr/include/aosp/frameworks/ml/nn/runtime/include",
+        "${sysroot}/usr/include/aosp/frameworks/ml/nn/driver/cache",
+    ]
+}
+
+shared_library("intel_nnhal") {
+  configs += [
+    ":target_defaults",
+    "//common-mk:visibility_default",
+  ]
+  cflags_cc = [
+    "-Wno-unused-variable",
+    "-Wno-unused-parameter",
+    "-Wno-non-virtual-dtor",
+    "-Wno-missing-field-initializers",
+    "-Wno-extern-c-compat",
+    "-Wno-unused-local-typedef",
+    "-Wno-unused-private-field",
+    "-Wno-invalid-partial-specialization",
+    "-Wno-array-bounds",
+    "-D_FORTIFY_SOURCE=2",
+    "-fexceptions",
+    "-fvisibility=default",
+    "-DIMPLEMENT_INFERENCE_ENGINE_API",
+  ]
+  deps=[
+    ":pugixml"
+  ]
+  sources = [
+    "graphAPI/IRDocument.cpp",
+    "graphAPI/IRLayer.cpp",
+    "gna_driver.cpp",
+    "Driver.cpp",
+    "utils.cpp",
+    "BasePreparedModel.cpp",
+    "cpu/CpuPreparedModel.cpp",
+    "gna/GnaPreparedModel.cpp",
+    "operations/src/Add.cpp",
+    "operations/src/AveragePool.cpp",
+    "operations/src/Concatination.cpp",
+    "operations/src/Convolution.cpp",
+    "operations/src/DepthwiseConvolution.cpp",
+    "operations/src/FullyConnected.cpp",
+    "operations/src/L2Normalization.cpp",
+    "operations/src/LocalResponseNormalization.cpp",
+    "operations/src/Logistic.cpp",
+    "operations/src/MaxPool.cpp",
+    "operations/src/Mul.cpp",
+    "operations/src/Relu.cpp",
+    "operations/src/Relu1.cpp",
+    "operations/src/Relu6.cpp",
+    "operations/src/Reshape.cpp",
+    "operations/src/Softmax.cpp",
+    "operations/src/Tanh.cpp",
+  ]
+  include_dirs = [
+    "./",
+    "cpu/",
+    "gna/",
+    "operations/include",
+    "graphAPI/",
+    "../openvino-2021-2/inference-engine/src/inference_engine",
+    "../openvino-2021-2/inference-engine/thirdparty/pugixml/src",
+    "../openvino-2021-2/inference-engine/include",
+    "../openvino-2021-2/inference-engine/include/cpp",
+    "../openvino-2021-2/inference-engine/include/details",
+    "../openvino-2021-2/inference-engine/include/details/os",
+    "../openvino-2021-2/inference-engine/include/cldnn",
+    "../openvino-2021-2/inference-engine/include/gna",
+    "../openvino-2021-2/inference-engine/include/hetero",
+    "../openvino-2021-2/inference-engine/include/mkldnn",
+    "../openvino-2021-2/inference-engine/include/openvx",
+    "../openvino-2021-2/inference-engine/include/vpu",
+    "../openvino-2021-2/inference-engine/src/legacy_api/include/legacy",
+    "../openvino-2021-2/inference-engine/src/legacy_api/include",
+    "../openvino-2021-2/inference-engine/src/inference_engine",
+    "../openvino-2021-2/inference-engine/src/dumper",
+    "../openvino-2021-2/inference-engine/src/inference_engine/cpp_interfaces",
+    "../openvino-2021-2/inference-engine/src/inference_engine/cpp_interfaces/base",
+    "../openvino-2021-2/inference-engine/src/inference_engine/cpp_interfaces/impl",
+    "../openvino-2021-2/inference-engine/src/inference_engine/cpp_interfaces/interface",
+    "../openvino-2021-2/inference-engine/thirdparty/pugixml/src/",
+    "../openvino-2021-2/inference-engine/src/plugin_api/",
+  ]
+  libs = [
+    "pthread",
+    "rt",
+    "nnapi-support",
+    "ngraph",
+    "inference_engine_legacy",
+    "inference_engine_c_api",
+    "inference_engine_preproc",
+    "inference_engine",
+    "nn-common",
+    "ssl",
+    "crypto"
+  ]
+  lib_dirs = [
+    "${sysroot}/usr/local/deployment_tools/inference_engine/lib/intel64/",
+    "${sysroot}/usr/local/lib64"
+  ]
+}
+
+static_library("pugixml") {
+  configs += [
+    ":target_defaults",
+    "//common-mk:pic",
+  ]
+  cflags_cc = [
+    "-Wno-unused-variable",
+    "-Wno-unused-parameter",
+    "-Wno-non-virtual-dtor",
+    "-Wno-missing-field-initializers",
+    "-Wno-extern-c-compat",
+    "-Wno-unused-local-typedef",
+    "-Wno-unused-private-field",
+    "-Wno-invalid-partial-specialization",
+    "-Wno-array-bounds",
+    "-D_FORTIFY_SOURCE=2",
+    "-fexceptions",
+    "-fvisibility=default",
+    "-DIMPLEMENT_INFERENCE_ENGINE_API",
+  ]
+  sources = [
+    "../openvino-2021-2/inference-engine/thirdparty/pugixml/src/pugixml.cpp"
+  ]
+  include_dirs = [
+   "../openvino-2021-2/inference-engine/thirdparty/pugixml/src",
+  ]
+}
+

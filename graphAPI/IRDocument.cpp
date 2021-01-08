@@ -54,7 +54,7 @@ class InternalNetworkImpl : public InferenceEngine::details::CNNNetworkImpl {
 public:
     InternalNetworkImpl() {}
     InternalNetworkImpl(const std::string netName) : InternalNetworkImpl() {
-        setPrecision(g_layer_precision);
+        // setPrecision(g_layer_precision);
         setName(netName);
     }
 
@@ -105,7 +105,7 @@ void IRDocument::process(const IRLayer &layer) {
     add(layer);
     for (auto o : layer->outData) {
         network->addData(o);
-        for (auto l : o->getInputTo()) process(l.second);
+        for (auto l : getInputTo(o)) process(l.second);
     }
 }
 
@@ -117,11 +117,11 @@ void IRDocument::optimize() {
             auto lin = l->input();
             auto lout = output(l);
 
-            lin->getInputTo().erase(l->name);
+            getInputTo(lin).erase(l->name);
 
-            auto lout_targets = lout->getInputTo();
+            auto lout_targets = getInputTo(lout);
             for (auto i : lout_targets) {
-                lin->getInputTo()[i.first] = i.second;
+                getInputTo(lin)[i.first] = i.second;
                 // reaplce target input data from lout to lin
                 for (auto &tar_inp : i.second->insData) {
                     if (tar_inp.lock() == lout) {
@@ -141,11 +141,11 @@ void IRDocument::optimize() {
 
 void IRDocument::build() {
     if (_processed) return;
-    network->setPrecision(g_layer_precision);
+    //network->setPrecision(g_layer_precision);
     InputsDataMap inputs;
     network->getInputsInfo(inputs);
     for (auto i : inputs) {
-        for (auto l : i.second->getInputData()->getInputTo()) process(l.second);
+        for (auto l : getInputTo(i.second->getInputData())) process(l.second);
     }
 
     for (auto l : network->allLayers()) {
@@ -214,7 +214,7 @@ void IRDocument::save(std::ostream &xml_os, std::ostream &bin_os) {
         CNNLayer::Ptr inputLayer(new CNNLayer(prms));
         inputLayer->type = "Input";
         auto input_data = kvp.second->getInputData();
-        input_data->getUserObject().v_int = icnt++;
+        //input_data->getUserObject().v_int = icnt++; TODO: Fix this???
         inputLayer->outData.push_back(input_data);
         saveToIR(bin_os, layers, inputLayer);
     }
@@ -222,7 +222,7 @@ void IRDocument::save(std::ostream &xml_os, std::ostream &bin_os) {
     for (auto &cnn_layer : _layers) {
         cnn_layer->userValue.v_int = ++id_cnt;
         int pcnt = 0;
-        for (auto output : cnn_layer->outData) output->getUserObject().v_int = pcnt++;
+        //for (auto output : cnn_layer->outData) output->getUserObject().v_int = pcnt++;
         saveToIR(bin_os, layers, cnn_layer);
     }
     pugi::xml_node edgesNode = root.append_child("edges");
@@ -233,8 +233,8 @@ void IRDocument::save(std::ostream &xml_os, std::ostream &bin_os) {
 
             edge.to.lid = kvp->userValue.v_int;
             edge.to.pid = pcnt++;
-            bool b = inputData.lock()->getCreatorLayer().expired();
-            edge.from.lid = b ? 0 : inputData.lock()->getCreatorLayer().lock()->userValue.v_int;
+            bool b = getCreatorLayer(inputData.lock()).expired();
+            edge.from.lid = b ? 0 : getCreatorLayer(inputData.lock()).lock()->userValue.v_int;
             edge.from.pid = inputData.lock()->getUserObject().v_int;
 
             _edges.push_back(edge);
@@ -326,9 +326,9 @@ void IRDocument::saveOutputToIR(pugi::xml_node &parent, const DataPtr &port) {
     auto node = parent.append_child("port");
     node.append_attribute("id").set_value(port->getUserObject().v_int);
     // node.append_attribute("buffer").set_value(reinterpret_cast<size_t>(buffer) & 0x00FFFFFF);
-    if (!port->getInputTo().empty()) {
+    if (!getInputTo(port).empty()) {
         std::string comment = "connected to ";
-        for (auto peer : port->getInputTo()) comment += ", " + peer.first;
+        for (auto peer : getInputTo(port)) comment += ", " + peer.first;
         node.append_child(pugi::xml_node_type::node_comment).set_value(comment.c_str());
     }
     auto dims = port->getDims();
@@ -346,7 +346,7 @@ void IRDocument::saveOutputToIR(pugi::xml_node &parent, const DataPtr &port) {
 void IRDocument::saveInputToIR(pugi::xml_node &parent, int index, const DataPtr &port) {
     auto node = parent.append_child("port");
     node.append_attribute("id").set_value(index);
-    auto peer = port->getCreatorLayer().lock();
+    auto peer = getCreatorLayer(port).lock();
     if (peer) {
         auto comment = "connected to " + peer->name;
         node.append_child(pugi::xml_node_type::node_comment).set_value(comment.c_str());
