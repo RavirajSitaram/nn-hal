@@ -1,4 +1,0 @@
-service neuralnetworks-hal-1-1-gpu /vendor/bin/hw/android.hardware.neuralnetworks@1.1-generic-service -D GPU
-    class hal
-    user system
-    group system
