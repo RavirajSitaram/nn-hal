@@ -23,6 +23,7 @@
 #include <log/log.h>
 #include <thread>
 #include "ValidateHal.h"
+#include <algorithm>
 
 #ifdef __ANDROID__
 #include <cutils/properties.h>
@@ -40,8 +41,173 @@ using namespace android::nn;
 
 static const V1_2::Timing kNoTiming = {.timeOnDevice = UINT64_MAX, .timeInDriver = UINT64_MAX};
 
+void notify(const sp<V1_0::IPreparedModelCallback>& callback, const ErrorStatus& status,
+            const sp<BasePreparedModel>& preparedModel) {
+    const auto ret = callback->notify(convertToV1_0(status), preparedModel);
+    if (!ret.isOk()) {
+        LOG(ERROR) << "Error when calling IPreparedModelCallback::notify: " << ret.description();
+    }
+}
+
+void notify(const sp<V1_2::IPreparedModelCallback>& callback, const ErrorStatus& status,
+            const sp<BasePreparedModel>& preparedModel) {
+    const auto ret = callback->notify_1_2(convertToV1_0(status), preparedModel);
+    if (!ret.isOk()) {
+        LOG(ERROR) << "Error when calling IPreparedModelCallback::notify_1_2: "
+                   << ret.description();
+    }
+}
+
+void notify(const sp<V1_3::IPreparedModelCallback>& callback, const ErrorStatus& status,
+            const sp<BasePreparedModel>& preparedModel) {
+    const auto ret = callback->notify_1_3(status, preparedModel);
+    if (!ret.isOk()) {
+        LOG(ERROR) << "Error when calling IPreparedModelCallback::notify_1_3: "
+                   << ret.description();
+    }
+}
+
+void notify(const sp<V1_0::IExecutionCallback>& callback, const ErrorStatus& status,
+            const hidl_vec<V1_2::OutputShape>&, Timing) {
+    const auto ret = callback->notify(convertToV1_0(status));
+    if (!ret.isOk()) {
+        LOG(ERROR) << "Error when calling IExecutionCallback::notify: " << ret.description();
+    }
+}
+
+void notify(const sp<V1_2::IExecutionCallback>& callback, const ErrorStatus& status,
+            const hidl_vec<V1_2::OutputShape>& outputShapes, Timing timing) {
+    const auto ret = callback->notify_1_2(convertToV1_0(status), outputShapes, timing);
+    if (!ret.isOk()) {
+        LOG(ERROR) << "Error when calling IExecutionCallback::notify_1_2: " << ret.description();
+    }
+}
+
+void notify(const sp<V1_3::IExecutionCallback>& callback, const ErrorStatus& status,
+            const hidl_vec<V1_2::OutputShape>& outputShapes, Timing timing) {
+    const auto ret = callback->notify_1_3(status, outputShapes, timing);
+    if (!ret.isOk()) {
+        LOG(ERROR) << "Error when calling IExecutionCallback::notify_1_3" << ret.description();
+    }
+}
+
+// Move out all the code from ModelInfo regarding runtime pool info
+// We need to make this function re-entrant
+template <typename T_IExecutionCallback>
+void asyncExecute(const V1_3::Request& request, V1_2::MeasureTiming measure,
+                  BasePreparedModel* preparedModel, time_point driverStart,
+                  const V1_3::OptionalTimePoint& halDeadline,
+                  const V1_3::OptionalTimeoutDuration& loopTimeoutDuration,
+                  const sp<T_IExecutionCallback>& callback) {
+    ALOGD("%s", __func__);
+
+    auto modelInfo = preparedModel->getModelInfo();
+    auto plugin = preparedModel->getPlugin();
+    auto ngraphNw = preparedModel->getNgraphNwCreator();
+
+    time_point driverEnd, deviceStart, deviceEnd;
+    if (measure == MeasureTiming::YES) deviceStart = now();
+
+#if 1
+    if (!modelInfo->setRunTimePoolInfosFromHidlMemories(request.pools)) {
+        notify(callback, ErrorStatus::GENERAL_FAILURE, {}, kNoTiming);
+        return;
+    }
+#else
+    std::vector<RunTimePoolInfo> requestPoolInfos;
+    if (!setRunTimePoolInfosFromHidlMemories(&requestPoolInfos, request.pools)) {
+        cb->notify(V1_0_ErrorStatus::GENERAL_FAILURE);
+        return;
+    }
+#endif
+
+    // if (halDeadline.has_value()) {
+    //     ALOGE("HAL Deadline has value !!!");
+    // }
+    
+    auto inLayerMap = ngraphNw->getInputLayerMap();
+    // Verify all the request inputs are captured during graph construction
+    // Can be optimized.
+    for (size_t i = 0; i < request.inputs.size(); i++) {
+        auto reqIn = modelInfo->getModelInputIndex(i);
+        ALOGD("Searching for input index : %d in layermap", reqIn);
+        auto iter2 = std::find_if(inLayerMap.begin(), inLayerMap.end(),
+                            [&](const std::pair<uint32_t, LayerInfo>& elem) {
+                                ALOGD("Index: %d", elem.first);
+                                return (elem.first == reqIn);
+                            });
+        if (iter2 == inLayerMap.end()) {
+            ALOGE("Did we miss mapping some of the inputs???");
+        }
+    }
+
+    for (size_t i = 0; i < request.inputs.size(); i++) {
+        auto inIndex = modelInfo->getModelInputIndex(i);
+        auto srcBlob = modelInfo->getBlobFromMemoryPoolIn(request, i);
+
+        // Get name of node from layermap
+        // Ignore memory layers for sometime
+        if (inLayerMap.find(inIndex) != inLayerMap.end()) {
+            auto layerData = inLayerMap[inIndex];
+            ALOGD("Found input index: %d layername : %s", inIndex, layerData.layerName.c_str());
+            auto destBlob = plugin->getInferRequest().GetBlob(layerData.layerName);
+            uint8_t* dest = destBlob->buffer().as<uint8_t*>();
+            uint8_t* src = srcBlob->buffer().as<uint8_t*>();
+            std::memcpy(dest, src, srcBlob->byteSize());
+            writeBufferToFile(layerData.layerName, srcBlob->buffer().as<float*>(), srcBlob->size());
+        } else {
+            ALOGE("Failed to find layerindex in input layers");
+        }
+    }
+
+    plugin->infer();
+
+    auto outLayerMap = ngraphNw->getOutputLayerMap();
+    for (size_t i = 0; i < request.outputs.size(); i++) {
+        auto outIndex = modelInfo->getModelOutputIndex(i);
+        ALOGI("OutputIndex: %d", outIndex);
+        void* destPtr = modelInfo->getBlobFromMemoryPoolOut(request, i);
+
+        if (outLayerMap.find(outIndex) != outLayerMap.end()) {
+            auto layerData = outLayerMap[outIndex];
+            ALOGD("Found output index: %d layername : %s", outIndex, layerData.layerName.c_str());
+            auto srcBlob = plugin->getInferRequest().GetBlob(layerData.layerName);
+            std::memcpy((uint8_t*)destPtr, srcBlob->buffer().as<uint8_t*>(), srcBlob->byteSize());
+            writeBufferToFile(layerData.layerName, srcBlob->buffer().as<float*>(), srcBlob->size());
+
+            float* a = static_cast<float*>(destPtr);
+            ALOGD("########### -- %f", *a);
+        } else {
+            ALOGE("Failed to find layerindex in output layers");
+            notify(callback, ErrorStatus::GENERAL_FAILURE,  {}, kNoTiming);
+        }
+    }
+
+    if (!modelInfo->updateRequestPoolInfos()) {
+        ALOGE("Failed to update the request pool infos");
+    }
+
+    if (measure == MeasureTiming::YES) {
+        driverEnd = now();
+        Timing timing = {.timeOnDevice = uint64_t(microsecondsDuration(deviceEnd, deviceStart)),
+                         .timeInDriver = uint64_t(microsecondsDuration(driverEnd, driverStart))};
+        // VLOG(L1, "Driver::asyncExecute timing = %s", toString(timing));
+        notify(callback, ErrorStatus::NONE, modelInfo->getOutputShapes(), timing);
+    } else {
+        notify(callback, ErrorStatus::NONE,  modelInfo->getOutputShapes(), kNoTiming);
+    }
+}
+
 void BasePreparedModel::deinitialize() {
     VLOG(L1, "deinitialize");
+
+    mModelInfo->unmapRuntimeMemPools();
+
+    if (mNet)
+        delete mNet;
+
+    if (mPlugin)
+        delete mPlugin;
 }
 
 template <typename T>
@@ -50,36 +216,6 @@ T getScalarData(const RunTimeOperandInfo& info) {
     T* data = reinterpret_cast<T*>(info.buffer);
     return data[0];
 }
-
-// Updates the RunTimeOperandInfo with the newly calculated shape.
-// Allocate the buffer if we need to.
-// static bool setInfoAndAllocateIfNeeded(RunTimeOperandInfo* info, const Shape& shape) {
-//     // For user-provided model output operands, the parameters must match the Shape
-//     // calculated from the preparation step.
-//     if (info->lifetime == OperandLifeTime::MODEL_OUTPUT) {
-//         if (info->type != shape.type || info->dimensions != shape.dimensions) {
-//             LOG(ERROR) << "Invalid type or dimensions for model output";
-//             return false;
-//         }
-//         if (info->type == OperandType::TENSOR_QUANT8_ASYMM &&
-//             (info->scale != shape.scale || info->zeroPoint != shape.offset)) {
-//             LOG(ERROR) << "Invalid scale or zeroPoint for model output";
-//             return false;
-//         }
-//     }
-//     info->type = shape.type;
-//     info->dimensions = shape.dimensions;
-//     info->scale = shape.scale;
-//     info->zeroPoint = shape.offset;
-//     if (info->lifetime == OperandLifeTime::TEMPORARY_VARIABLE && info->buffer == nullptr) {
-//         uint32_t length = sizeOfData(info->type, info->dimensions);
-//         info->buffer = new uint8_t[length];
-//         if (info->buffer == nullptr) {
-//             return false;
-//         }
-//     }
-//     return true;
-// }
 
 bool BasePreparedModel::initialize() {
     VLOG(L1, "initialize");
@@ -93,7 +229,7 @@ bool BasePreparedModel::initialize() {
         default:
             ALOGE("Plugin not supported yet for this device type!!!");
             return false;
-    }    
+    }
     
     if (!mModelInfo->initRuntimeInfo()) {
         ALOGE("Failed to initialize Model runtime parameters!!");
@@ -108,21 +244,39 @@ bool BasePreparedModel::initialize() {
 
     auto vecOperations = mModelInfo->getOperations();
     for (auto op: vecOperations) {
-        if (!NgraphOpsFactory::isOperationSupported(op, mModelInfo.get()))
+        if (!NgraphOpsFactory::isOperationSupported(op, mModelInfo.get())) {
+            ALOGE("Returning false from init() function");
+            return false;
+        }
+    }
+
+    ALOGI("Generating IR Graph");
+    mNet = mNgraphCreator->generateIRGraph();
+    
+    switch (mTargetDevice)
+    {
+        case IntelDeviceType::CPU:
+            mPlugin = new DevicePlugin<IntelDeviceType::CPU>(mNet);
+            mPlugin->loadNetwork();
+            ALOGE("Done calling loadNetwork");
+            break;
+        
+        default:
+            ALOGE("Plugin not supported yet for this device type!!!");
             return false;
     }
 
-    mNet = mNgraphCreator->generateIRGraph();
-    mPlugin->prepareInput(InferenceEngine::Precision::FP32, Layout::NCHW);
-    mPlugin->prepareOutput(InferenceEngine::Precision::FP32, Layout::NCHW);
-    mPlugin->loadNetwork();
-
+    ALOGD("Returning from preparedModel init");
     return true;
 }
 
-Return<ErrorStatus> BasePreparedModel::executeBase(const V1_3::Request& request,
-                                                    MeasureTiming measure,
-                                                    const sp<V1_3::IExecutionCallback>& callback) {
+template <typename T_IExecutionCallback>
+Return<ErrorStatus> executeBase(const V1_3::Request& request,
+                                MeasureTiming measure,
+                                BasePreparedModel* preparedModel,
+                                const V1_3::OptionalTimePoint& halDeadline,
+                                const V1_3::OptionalTimeoutDuration& loopTimeoutDuration,
+                                const sp<T_IExecutionCallback>& callback) {
     VLOG(L1, "executebase");
 
     time_point driverStart;
@@ -132,40 +286,77 @@ Return<ErrorStatus> BasePreparedModel::executeBase(const V1_3::Request& request,
         ALOGE("invalid callback passed to execute");
         return ErrorStatus::INVALID_ARGUMENT;
     }
-    if (!validateRequest(request, mModelInfo->getModel())) {
-        callback->notify_1_3(ErrorStatus::INVALID_ARGUMENT, {}, kNoTiming);
+    if (!validateRequest(request, preparedModel->getModelInfo()->getModel())) {
+        notify(callback, ErrorStatus::INVALID_ARGUMENT, {}, kNoTiming);
         return ErrorStatus::INVALID_ARGUMENT;
     }
 
     // This thread is intentionally detached because the driver service
     // is expected to live forever.
-    std::thread([this, request, measure, driverStart, callback] {
-        asyncExecute(request, measure, driverStart, callback);
+    std::thread([preparedModel, request, measure, driverStart, callback, halDeadline,
+                    loopTimeoutDuration] {
+        asyncExecute(request, measure, preparedModel,
+                     driverStart, halDeadline, loopTimeoutDuration, callback);
     }).detach();
 
     return ErrorStatus::NONE;
 }
 
-void BasePreparedModel::asyncExecute(const V1_3::Request& request, V1_2::MeasureTiming measure,
-                                 time_point driverStart,
-                                 const sp<V1_3::IExecutionCallback>& callback) {
-    time_point driverEnd, deviceStart, deviceEnd;
-    if (measure == MeasureTiming::YES) deviceStart = now();
+#if 0
+bool setRunTimePoolInfosFromHidlMemories(std::vector<RunTimePoolInfo>* poolInfos,
+                                         const hidl_vec<hidl_memory>& pools) {
+    poolInfos->resize(pools.size());
+    for (size_t i = 0; i < pools.size(); i++) {
+        auto& poolInfo = (*poolInfos)[i];
+        if (!poolInfo.set(pools[i].hidlMemory())) {
+            LOG(ERROR) << "Could not map pool";
+            return false;
+        }
+    }
+    return true;
+}
+#endif
 
-    if (!mModelInfo->setRunTimePoolInfosFromHidlMemories(request.pools)) {
-        callback->notify_1_3(ErrorStatus::GENERAL_FAILURE, {}, kNoTiming);
+static std::tuple<ErrorStatus, hidl_vec<V1_2::OutputShape>, Timing>
+executeSynchronouslyBase(const V1_3::Request& request, V1_2::MeasureTiming measure,
+                  BasePreparedModel* preparedModel,
+                  const V1_3::OptionalTimePoint& halDeadline,
+                  const V1_3::OptionalTimeoutDuration& loopTimeoutDuration) {
+    ALOGD("%s", __func__);
+
+    auto modelInfo = preparedModel->getModelInfo();
+    auto plugin = preparedModel->getPlugin();
+    auto ngraphNw = preparedModel->getNgraphNwCreator();
+
+    time_point driverStart, driverEnd, deviceStart, deviceEnd;
+    if (measure == MeasureTiming::YES) driverStart = now();
+
+#if 1
+    if (!modelInfo->setRunTimePoolInfosFromHidlMemories(request.pools)) {
+        ALOGE("Failed to set runtime pool info from HIDL memories");
+        return {ErrorStatus::GENERAL_FAILURE, {}, kNoTiming};
+    }
+#else
+    std::vector<RunTimePoolInfo> requestPoolInfos;
+    if (!setRunTimePoolInfosFromHidlMemories(&requestPoolInfos, request.pools)) {
+        cb->notify(V1_0_ErrorStatus::GENERAL_FAILURE);
         return;
     }
+#endif
 
-    hidl_vec<V1_2::OutputShape> outputShapes(request.outputs.size());
+    // if (halDeadline.has_value()) {
+    //     ALOGE("HAL Deadline has value !!!");
+    // }
     
-    auto inLayerMap = mNgraphCreator->getInputLayerMap();
+    auto inLayerMap = ngraphNw->getInputLayerMap();
     // Verify all the request inputs are captured during graph construction
     // Can be optimized.
     for (size_t i = 0; i < request.inputs.size(); i++) {
-        auto reqIn = mModelInfo->getModelInputIndex(i);
+        auto reqIn = modelInfo->getModelInputIndex(i);
+        ALOGD("Searching for input index : %d in layermap", reqIn);
         auto iter2 = std::find_if(inLayerMap.begin(), inLayerMap.end(),
                             [&](const std::pair<uint32_t, LayerInfo>& elem) {
+                                ALOGD("Index: %d", elem.first);
                                 return (elem.first == reqIn);
                             });
         if (iter2 == inLayerMap.end()) {
@@ -174,55 +365,66 @@ void BasePreparedModel::asyncExecute(const V1_3::Request& request, V1_2::Measure
     }
 
     for (size_t i = 0; i < request.inputs.size(); i++) {
-        auto inIndex = mModelInfo->getModelInputIndex(i);
-        auto srcBlob = mModelInfo->getBlobFromMemoryPoolIn(request, inIndex);
+        auto inIndex = modelInfo->getModelInputIndex(i);
+        auto srcBlob = modelInfo->getBlobFromMemoryPoolIn(request, i);
 
         // Get name of node from layermap
         // Ignore memory layers for sometime
         if (inLayerMap.find(inIndex) != inLayerMap.end()) {
             auto layerData = inLayerMap[inIndex];
-            auto destBlob = mPlugin->getInferRequest().GetBlob(layerData.layerName);
-            float* dest = destBlob->buffer().as<float*>();
-            float* src = srcBlob->buffer().as<float*>();
+            ALOGD("Found input index: %d layername : %s", inIndex, layerData.layerName.c_str());
+            auto destBlob = plugin->getInferRequest().GetBlob(layerData.layerName);
+            uint8_t* dest = destBlob->buffer().as<uint8_t*>();
+            uint8_t* src = srcBlob->buffer().as<uint8_t*>();
             std::memcpy(dest, src, srcBlob->byteSize());
+            writeBufferToFile(layerData.layerName, srcBlob->buffer().as<float*>(), srcBlob->size());
         } else {
-            ALOGE("Failed to find layerindex in layername");
+            ALOGE("Failed to find layerindex in input layers");
         }
     }
 
-    mPlugin->infer();
+    if (measure == MeasureTiming::YES) deviceStart = now();
+    plugin->infer();
+    if (measure == MeasureTiming::YES) deviceEnd = now();
 
-    auto outLayerMap = mNgraphCreator->getOutputLayerMap();
+    auto outLayerMap = ngraphNw->getOutputLayerMap();
     for (size_t i = 0; i < request.outputs.size(); i++) {
-        auto outIndex = mModelInfo->getModelOutputIndex(i);
-        void* destPtr = static_cast<float*>(mModelInfo->getBlobFromMemoryPoolOut(request, outIndex));
+        auto outIndex = modelInfo->getModelOutputIndex(i);
+        ALOGI("OutputIndex: %d", outIndex);
+        void* destPtr = modelInfo->getBlobFromMemoryPoolOut(request, i);
 
         if (outLayerMap.find(outIndex) != outLayerMap.end()) {
             auto layerData = outLayerMap[outIndex];
-            auto srcBlob = mPlugin->getInferRequest().GetBlob(layerData.layerName);
-            float* src = srcBlob->buffer().as<float*>();
-            std::memcpy(destPtr, src, srcBlob->byteSize());
+            ALOGD("Found output index: %d layername : %s", outIndex, layerData.layerName.c_str());
+            auto srcBlob = plugin->getInferRequest().GetBlob(layerData.layerName);
+            std::memcpy((uint8_t*)destPtr, srcBlob->buffer().as<uint8_t*>(), srcBlob->byteSize());
+            writeBufferToFile(layerData.layerName, srcBlob->buffer().as<float*>(), srcBlob->size());
+            
+            
+            float* a = static_cast<float*>(destPtr);
+            ALOGD("########### -- %f", *a);
         } else {
-            ALOGE("Failed to find layerindex in layername");
+            ALOGE("Failed to find layerindex in output layers");
+            return {ErrorStatus::GENERAL_FAILURE, {}, kNoTiming};
         }
     }
-
-    mModelInfo->updateRequestPoolInfos();
+    if (!modelInfo->updateRequestPoolInfos()) {
+        ALOGE("Failed to update the request pool infos");
+        return {ErrorStatus::GENERAL_FAILURE, {}, kNoTiming};
+    }
     
-    Return<void> returned;
+    //Return<void> returned;
     if (measure == MeasureTiming::YES) {
         driverEnd = now();
         Timing timing = {.timeOnDevice = uint64_t(microsecondsDuration(deviceEnd, deviceStart)),
                          .timeInDriver = uint64_t(microsecondsDuration(driverEnd, driverStart))};
+        return {ErrorStatus::NONE, modelInfo->getOutputShapes(), timing};
         // VLOG(L1, "Driver::asyncExecute timing = %s", toString(timing));
-        returned = callback->notify_1_3(ErrorStatus::NONE, {}, timing);
-    } else {
-        returned = callback->notify_1_3(ErrorStatus::NONE, {}, kNoTiming);
+        //returned = callback->notify_1_3(ErrorStatus::NONE, modelInfo->getOutputShapes(), timing);
     }
     
-    if (!returned.isOk()) {
-        ALOGE("hidl callback failed to return properly: %s", returned.description().c_str());
-    }
+    //returned = callback->notify_1_3(ErrorStatus::NONE,  modelInfo->getOutputShapes(), kNoTiming);
+    return {ErrorStatus::NONE, modelInfo->getOutputShapes(), kNoTiming};
 }
 
 Return<void> BasePreparedModel::executeSynchronously(const V1_0::Request& request,
@@ -239,29 +441,18 @@ Return<void> BasePreparedModel::executeSynchronously_1_3(const V1_3::Request &re
                                           const V1_3::OptionalTimeoutDuration& loopTimeoutDuration,
                                           V1_3::IPreparedModel::executeSynchronously_1_3_cb cb) {
     VLOG(L1, "Begin to executeSynchronously_1_3");
-    time_point driverStart, driverEnd, deviceStart, deviceEnd;
-    if (measure == MeasureTiming::YES) deviceStart = now();
-
-    Return<void> returned;
-    if (measure == MeasureTiming::YES) {
-        driverEnd = now();
-        Timing timing = {.timeOnDevice = uint64_t(microsecondsDuration(deviceEnd, deviceStart)),
-                         .timeInDriver = uint64_t(microsecondsDuration(driverEnd, driverStart))};
-        VLOG(L1, "Driver::executeSynchronously timing = %s", timing);
-        cb(ErrorStatus::NONE, {}, timing);
-    } else {
-        cb(ErrorStatus::NONE, {}, kNoTiming);
-    }
+    auto [status, outputShapes, timing] = executeSynchronouslyBase(request, measure, this, deadline, loopTimeoutDuration);
+    cb(status, std::move(outputShapes), timing);
     return Void();
 }
 
 Return<ErrorStatus> BasePreparedModel::execute_1_3(const V1_3::Request& request,
                                           MeasureTiming measure,
-                                          const V1_3::OptionalTimePoint&,
-                                          const V1_3::OptionalTimeoutDuration&,
+                                          const V1_3::OptionalTimePoint& deadline,
+                                          const V1_3::OptionalTimeoutDuration& loopTimeoutDuration,
                                           const sp<V1_3::IExecutionCallback>& callback) {
-    VLOG(L1, "Begin to execute");
-    return executeBase(request, MeasureTiming::NO, callback);
+    VLOG(L1, "Begin to execute_1_3");
+    return executeBase(request, measure, this, deadline, loopTimeoutDuration, callback);
 }
 
 Return<void> BasePreparedModel::configureExecutionBurst(
@@ -276,8 +467,8 @@ Return<void> BasePreparedModel::configureExecutionBurst(
 
 Return<V1_0::ErrorStatus> BasePreparedModel::execute(const V1_0::Request& request,
                                            const sp<V1_0::IExecutionCallback>& callback) {
-    callback->notify(V1_0::ErrorStatus::GENERAL_FAILURE);
-    return V1_0::ErrorStatus::GENERAL_FAILURE;
+    const ErrorStatus status = executeBase(android::nn::convertToV1_3(request), MeasureTiming::NO, this, {}, {}, callback);
+    return android::nn::convertToV1_0(status);
 }
 
 Return<V1_0::ErrorStatus> BasePreparedModel::execute_1_2(const V1_0::Request& request, MeasureTiming measure,

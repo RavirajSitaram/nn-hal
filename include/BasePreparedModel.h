@@ -24,6 +24,8 @@
 #include <sys/mman.h>
 #include <fstream>
 #include <string>
+#include <frameworks/ml/nn/runtime/include/NeuralNetworks.h>
+#include <frameworks/ml/nn/common/include/Utils.h>
 
 #include "Driver.h"
 #include "Utils.h"
@@ -70,7 +72,8 @@ using executeFenced_cb = std::function<void(::android::hardware::neuralnetworks:
 class BasePreparedModel : public V1_3::IPreparedModel{
     public:
         BasePreparedModel(IntelDeviceType device)
-        : mTargetDevice(device) {
+        : mTargetDevice(device),
+          mNet(nullptr) {
 #ifdef __ANDROID__
             mUseNgraph =
                 isNgraphPropSet();  // TODO:Should additionally check if all the ops are supported
@@ -79,7 +82,8 @@ class BasePreparedModel : public V1_3::IPreparedModel{
         }
 
         BasePreparedModel(IntelDeviceType device, const Model& model)
-        : mTargetDevice(device) {
+        : mTargetDevice(device),
+          mNet(nullptr) {
 #ifdef __ANDROID__
             mUseNgraph = isNgraphPropSet();
 #endif
@@ -126,18 +130,24 @@ class BasePreparedModel : public V1_3::IPreparedModel{
             configureExecutionBurst_cb cb) override;
 
         bool initialize();
+
+        std::shared_ptr<NnapiModelInfo> getModelInfo() {
+            return mModelInfo;
+        }
+
+        std::shared_ptr<NgraphNetworkCreator> getNgraphNwCreator() {
+            return mNgraphCreator;
+        }
+
+        IDevicePlugin* getPlugin() {
+            return mPlugin;
+        }
         
 protected:
         void deinitialize();
         //bool initializeRunTimeOperandInfo();
         //void initializeInput();
         //bool finalizeOutput();
-
-        Return<ErrorStatus> executeBase(const V1_3::Request& request, V1_2::MeasureTiming measure,
-                                               const sp<V1_3::IExecutionCallback>& callback);
-        void asyncExecute(const V1_3::Request& request, V1_2::MeasureTiming measure,
-                                 time_point driverStart,
-                                 const sp<V1_3::IExecutionCallback>& callback);
 
         IntelDeviceType mTargetDevice;
         std::shared_ptr<NnapiModelInfo> mModelInfo;

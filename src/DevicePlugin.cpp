@@ -19,8 +19,31 @@ bool DevicePlugin<T>::loadNetwork() {
     InferenceEngine::Core ie;
     std::map<std::string, std::string> config;
 
-    mExecutableNw = ie.LoadNetwork(*mNetwork, "CPU");
-    mInferRequest = mExecutableNw.CreateInferRequest();
+    if (mNetwork) {
+        mExecutableNw = ie.LoadNetwork(*mNetwork, "CPU");
+        ALOGD("LoadNetwork is done....");
+        mInferRequest = mExecutableNw.CreateInferRequest();
+        ALOGD("CreateInfereRequest is done....");
+
+        mInputInfo = mNetwork->getInputsInfo();
+        mOutputInfo = mNetwork->getOutputsInfo();
+
+//#ifdef NN_DEBUG
+        for (auto input : mInputInfo) {
+            auto dims = input.second->getTensorDesc().getDims();
+            for (auto i : dims) {
+                ALOGI(" Dimes : %d", i);
+            }
+            ALOGI("Name: %s ", input.first.c_str());
+        }
+//#endif
+    } else {
+        ALOGE("Invalid Network pointer");
+        return false;
+    }
+
+    return true;
+
 }
 
 // Need to be called before loadnetwork.. But not sure whether need to be called for 

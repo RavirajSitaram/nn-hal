@@ -13,6 +13,7 @@ bool NnapiModelInfo::initializeRunTimeOperandInfo() {
         return false;
     }
     mOperands.resize(count);
+    mOutputShapes.resize(mModel.main.outputIndexes.size());
 
     // Start by setting the runtime info to what's in the model.
     for (size_t i = 0; i < count; i++) {
@@ -67,8 +68,8 @@ bool NnapiModelInfo::initializeRunTimeOperandInfo() {
                 to.numberOfUsesLeft = 0;
                 break;
             }
-            case OperandLifeTime::SUBGRAPH_INPUT:
             case OperandLifeTime::SUBGRAPH_OUTPUT:
+            case OperandLifeTime::SUBGRAPH_INPUT:
             case OperandLifeTime::NO_VALUE:
                 to.buffer = nullptr;
                 to.numberOfUsesLeft = 0;
@@ -78,6 +79,14 @@ bool NnapiModelInfo::initializeRunTimeOperandInfo() {
                 break;
         }
     }
+
+    for (uint32_t i = 0; i < mModel.main.outputIndexes.size(); i++) {
+        const uint32_t operandIndex = mModel.main.outputIndexes[i];
+        const RunTimeOperandInfo& from = mOperands[operandIndex];
+        mOutputShapes[i].dimensions = from.dimensions;
+        mOutputShapes[i].isSufficient = true;
+    }
+
     return true;
 }
 
@@ -94,9 +103,11 @@ T NnapiModelInfo::GetConstFromBuffer(const uint8_t* buf, uint32_t len) {
 }
 
 const uint8_t* NnapiModelInfo::GetOperandMemory(int index, uint32_t& lenOut) {
+    ALOGD("%s", __func__);
     const auto op = mModel.main.operands[index];
     lenOut = op.location.length;
     if (op.lifetime == OperandLifeTime::CONSTANT_COPY) {
+        ALOGD("CONST_COPY");
         if (op.location.poolIndex != 0) {
             ALOGE("CONSTANT_COPY expects poolIndex to be 0");
             nnAssert(false);
@@ -159,7 +170,7 @@ Blob::Ptr NnapiModelInfo::GetInOutOperandAsBlob(RunTimeOperandInfo& op, const ui
             } else {
                 if (inputDims.size() != 4) {
                     InferenceEngine::TBlob<float>::Ptr blob =
-                        std::make_shared<InferenceEngine::TBlob<float>>(td, (float*)buf, len);
+                        std::make_shared<InferenceEngine::TBlob<float>>(td, (float*)buf);
                     return blob;
                 } else {
                     InferenceEngine::TBlob<float>::Ptr blob =
@@ -220,7 +231,7 @@ Blob::Ptr NnapiModelInfo::GetInOutOperandAsBlob(RunTimeOperandInfo& op, const ui
                 return blob;
             } else {
                 InferenceEngine::TBlob<float>::Ptr blob =
-                    InferenceEngine::make_shared_blob<float>(td, (float*)buf, len);
+                    InferenceEngine::make_shared_blob<float>(td, (float*)buf);
                 return blob;
             }
         }
@@ -324,7 +335,7 @@ IRBlob::Ptr NnapiModelInfo::GetConstOperandAsTensor(int operand_idx, int operati
 
 // Redundant.. Remove the code
 IRBlob::Ptr NnapiModelInfo::GetConstWeightsOperandAsTensor(uint32_t index) {
-    dumpOperand(index, model);
+    dumpOperand(index, mModel);
     const auto op = mModel.main.operands[index];
     uint32_t len;
     const uint8_t* buf = GetOperandMemory(index, len);
@@ -412,11 +423,12 @@ IRBlob::Ptr NnapiModelInfo::GetConstWeightsOperandAsTensor(uint32_t index) {
 }
 
 bool NnapiModelInfo::setRunTimePoolInfosFromHidlMemories(const hidl_vec<V1_3::Request::MemoryPool>& pools) {
+   ALOGD("Number of pools: %d", pools.size());
    mRequestPoolInfos.resize(pools.size());
     for (size_t i = 0; i < pools.size(); i++) {        
          auto& poolInfo = mRequestPoolInfos[i];
          if (!poolInfo.set(pools[i].hidlMemory())) {
-            LOG(ERROR) << "Could not map pool";
+            LOG(ERROR) << "Could not map memory pool !!!";
             return false;
         }
     }
@@ -440,6 +452,7 @@ Blob::Ptr NnapiModelInfo::getBlobFromMemoryPoolIn(const V1_3::Request& request, 
 
     operand.buffer = r.buffer + arg.location.offset;
     operand.length = arg.location.length;
+    ALOGI("%s Operand length:%d pointer:%p offset:%d pool index: %d", __func__, operand.length, (r.buffer + arg.location.offset), arg.location.offset, poolIndex);
     return GetInOutOperandAsBlob(operand,
                                 const_cast<uint8_t*>(r.buffer + arg.location.offset),
                                 operand.length);
@@ -452,6 +465,8 @@ void* NnapiModelInfo::getBlobFromMemoryPoolOut(const V1_3::Request& request, uin
     nnAssert(poolIndex < mRequestPoolInfos.size());
     auto& r = mRequestPoolInfos[poolIndex];
 
+    ALOGD("%s lifetime:%d location offset:%d length:%d pool index:%d", __func__, operand.lifetime, arg.location.offset, arg.location.length, poolIndex);
+
     if (arg.dimensions.size() > 0) {
             // It's the responsibility of the caller to validate that
             // from.dimensions only modifies the dimensions that were
@@ -462,6 +477,7 @@ void* NnapiModelInfo::getBlobFromMemoryPoolOut(const V1_3::Request& request, uin
 
     operand.buffer = r.buffer + arg.location.offset;
     operand.length = arg.location.length;
+    ALOGI("%s Operand length:%d pointer:%p", __func__, operand.length, (r.buffer + arg.location.offset));
     return (r.buffer + arg.location.offset);
 }
 

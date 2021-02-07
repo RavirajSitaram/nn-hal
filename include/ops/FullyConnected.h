@@ -1,6 +1,6 @@
 #pragma once
-#ifndef __ADD_H
-#define __ADD_H
+#ifndef __FULLY_CONNECTED_H
+#define __FULLY_CONNECTED_H
 #include <BaseOp.h>
 
 namespace android {
@@ -9,9 +9,9 @@ namespace neuralnetworks {
 namespace nnhal {
 
 // Add is supposed to create an Add Node based on the arguments/parameters.
-class Add : public OperationsBase {
+class FullyConnected : public OperationsBase {
 public:
-    Add(NnapiModelInfo* model, NgraphNetworkCreator* nwCreator): 
+    FullyConnected(NnapiModelInfo* model, NgraphNetworkCreator* nwCreator): 
 							OperationsBase(model, nwCreator) {
 	}
 
@@ -19,7 +19,6 @@ public:
 
     static bool validate(const Operation& op, NnapiModelInfo* modelInfo) ;
     bool createNode(const Operation& operation) override;
-    virtual ~Add() {}
 };
 
 }  // namespace nnhal

@@ -31,12 +31,12 @@
 
 // extern unsigned int debugMask  = ((1 << (L1 + 1)) - 1);
 
-
-
 namespace android {
 namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
+
+#define NN_DEBUG
 
 enum DebugLevel {
     L0,
@@ -94,7 +94,7 @@ enum PaddingScheme {
 
 #define dumpOperand(index, model)                                      \
     do {                                                        \
-        const auto op = model.operands[index];                 \
+        const auto op = model.main.operands[index];                 \
         ALOGI("---------------------------------------------"); \
         ALOGI("Operand index: %d", index);                      \
         ALOGI("%s", toString(op).c_str());                      \
@@ -288,6 +288,7 @@ struct RunTimePoolInfo {
 
     bool set(const hidl_memory& hidlMemory);
     bool update();
+    bool unmap_mem();
 };
 
 struct LayerInfo {
@@ -374,6 +375,10 @@ T getOperandConstVal(const Model& model, const Operand& operand) {
     const T* data = reinterpret_cast<const T*>(&model.operandValues[operand.location.offset]);
     return data[0];
 }
+
+void writeBufferToFile(std::string filename,
+                        const float* buf,
+                        size_t length);
 
 }  // namespace nnhal
 }  // namespace neuralnetworks

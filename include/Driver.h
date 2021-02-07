@@ -98,11 +98,7 @@ public:
     }
 
     Return<V1_0::ErrorStatus> prepareModel(const V1_0::Model& model,
-                                            const sp<V1_0::IPreparedModelCallback>& callback) {
-        ALOGI("Entering %s", __func__);
-
-        return V1_0::ErrorStatus::NONE;
-    }
+                                            const sp<V1_0::IPreparedModelCallback>& callback);
 
     // For HAL-1.1 version
     Return<void> getCapabilities_1_1(getCapabilities_1_1_cb cb) {

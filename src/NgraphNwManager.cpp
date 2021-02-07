@@ -5,12 +5,14 @@
 #include "NgraphNwManager.h"
 #include "NgraphOpsFactory.h"
 
+#define LOG_TAG "NGraphNwManager"
+
 namespace android {
 namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
 
-std::map<OperationType, std::shared_ptr<OperationsBase>> NgraphOpsFactory::sOperationsMap = {};
+std::map<OperationType, std::shared_ptr<OperationsBase>> NgraphOpsFactory::sOperationsMap;
 
 bool NgraphNetworkCreator::init() {
 	ALOGI("%s", __func__);
@@ -20,7 +22,8 @@ bool NgraphNetworkCreator::init() {
 InferenceEngine::CNNNetwork* NgraphNetworkCreator::generateIRGraph() {
 	ALOGI("%s", __func__);
 	
-	for (const auto& op: mModelInfo->getOperations()) {
+    auto operations = mModelInfo->getOperations();
+	for (const auto& op: operations) {
 		auto nGraphOp = NgraphOpsFactory::createNgraphOp(op.type, mModelInfo, this);
 		if (!nGraphOp->createNode(op)) {
             ALOGE("Failed to createNode for op type:%d", op.type);

@@ -152,6 +152,29 @@ Return<void> Driver::getSupportedOperations_1_3(const Model& model,
     return Void();
 }
 
+Return<V1_0::ErrorStatus> Driver::prepareModel(const V1_0::Model& model,
+                                            const sp<V1_0::IPreparedModelCallback>& callback) {
+    ALOGI("Entering %s", __func__);
+    if (callback.get() == nullptr) {
+        ALOGI("invalid callback passed to prepareModel");
+        return convertToV1_0(V1_3::ErrorStatus::INVALID_ARGUMENT);
+    }
+
+    if (!validateModel(model)) {
+        callback->notify(convertToV1_0(V1_3::ErrorStatus::INVALID_ARGUMENT), nullptr);
+        return convertToV1_0(V1_3::ErrorStatus::INVALID_ARGUMENT);
+    }
+
+    sp<BasePreparedModel> driverPreparedModel = new BasePreparedModel(mDeviceType, convertToV1_3(model));
+    if (!driverPreparedModel->initialize()) {
+        ALOGI("Failed to initialize prepared model");
+        callback->notify(convertToV1_0(V1_3::ErrorStatus::INVALID_ARGUMENT), nullptr);
+    }
+
+    callback->notify(convertToV1_0(V1_3::ErrorStatus::NONE), driverPreparedModel);
+    return convertToV1_0(ErrorStatus::NONE);
+}
+
 Return<V1_3::ErrorStatus> Driver::prepareModel_1_3(const V1_3::Model& model,
                                                V1_1::ExecutionPreference preference,
                                                V1_3::Priority priority,

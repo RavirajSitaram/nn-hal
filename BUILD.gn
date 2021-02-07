@@ -39,6 +39,7 @@ config("target_defaults") {
     ]
     include_dirs = [
         "${sysroot}/usr/include/aosp",
+        "${sysroot}/usr/include/aosp/frameworks/ml",
         "${sysroot}/usr/include/aosp/frameworks/ml/nn/common/include",
         "${sysroot}/usr/include/aosp/frameworks/ml/nn/runtime/include",
         "${sysroot}/usr/include/aosp/frameworks/ml/nn/driver/cache",
@@ -75,6 +76,7 @@ shared_library("intel_nnhal") {
     "src/ModelManager.cpp",
     "src/ops/BaseOp.cpp",
     "src/ops/Add.cpp",
+    "src/ops/FullyConnected.cpp",
     "src/NgraphNwManager.cpp",
     "src/BasePreparedModel.cpp",
     "src/DevicePlugin.cpp"

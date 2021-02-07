@@ -21,6 +21,10 @@
 #include <hidlmemory/mapping.h>
 #include <sys/mman.h>
 
+#include <fstream>
+#include <sys/stat.h>
+
+
 // inline unsigned int debugMask = ((1 << (L1 + 1)) - 1);
 
 
@@ -458,11 +462,13 @@ bool RunTimePoolInfo::set(const hidl_memory& hidlMemory) {
             return false;
         }
         memory->update();
-        buffer = reinterpret_cast<uint8_t*>(static_cast<void*>(memory->getPointer()));
+        buffer = static_cast<uint8_t*>(static_cast<void*>(memory->getPointer()));
         if (buffer == nullptr) {
             LOG(ERROR) << "Can't access shared memory.";
             return false;
         }
+
+        ALOGD("In SET call. Pointer is %p", buffer);
         return true;
     } else if (memType == "mmap_fd") {
         size_t size = hidlMemory.size();
@@ -481,21 +487,38 @@ bool RunTimePoolInfo::set(const hidl_memory& hidlMemory) {
     }
 }
 
-ngraph::Shape toNgraphShape(const vec<uint32_t>& dimensions) {
-    std::vector<size_t> dims;
+bool RunTimePoolInfo::unmap_mem() {
+        if (buffer){
+            const size_t size = hidlMemory.size();
+            if (hidlMemory.name() == "mmap_fd") {
+                if (munmap(buffer, size)) {
+                    VLOG(L1, "Unmap failed\n");
+                    return false;
+                }
+                buffer = nullptr;
+            }   
+        }
+    return true;
+}
+
+ngraph::Shape toNgraphShape(const std::vector<uint32_t>& dimensions) {
+    ngraph::Shape shapeVec;
     for (auto i=0; i < dimensions.size(); i++) {
-        dims[i] = static_cast<size_t>(dimensions[i]);
+        shapeVec.push_back(static_cast<size_t>(dimensions[i]));
     }
-    return dims;
+
+    return shapeVec;
 }
 
 // Making sure the output data are correctly updated after execution.
 bool RunTimePoolInfo::update() {
     auto memType = hidlMemory.name();
     if (memType == "ashmem") {
+        ALOGD("ashmem .. calling commit : %p", buffer);
         memory->commit();
         return true;
     } else if (memType == "mmap_fd") {
+        ALOGD("mmap_fd");
         int prot = hidlMemory.handle()->data[1];
         if (prot & PROT_WRITE) {
             size_t size = hidlMemory.size();
@@ -504,6 +527,36 @@ bool RunTimePoolInfo::update() {
     }
     // No-op for other types of memory.
     return true;
+}
+
+void createDirs(std::string path) {
+    char delim = '/';
+    int start = 0;
+
+    auto pos = path.find(delim);
+    while (pos != std::string::npos) {
+		auto dir = path.substr(start, pos - start+1);
+
+        struct stat sb;
+        if (!((stat(dir.c_str(), &sb) == 0) && (S_ISDIR(sb.st_mode)))) {
+            if (mkdir(dir.c_str(), 0777) != 0)
+                std::cout << "failed to create folder: " << dir << std::endl;
+		}
+		pos = path.find(delim, pos+1);
+	}
+}
+
+void writeBufferToFile(std::string filename,
+                        const float* buf,
+                        size_t length) {
+	createDirs(filename);
+
+    std::ofstream ofs;
+    ofs.open(filename.c_str(), std::ofstream::out | std::ofstream::trunc);
+    for (auto i =0; i < length; i++) {
+        ofs << buf[i] << "\n";
+    }
+    ofs.close();
 }
 
 }  // namespace nnhal

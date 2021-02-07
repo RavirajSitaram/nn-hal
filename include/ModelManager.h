@@ -49,7 +49,7 @@ class NnapiModelInfo {
         }
 
         uint32_t getModelOutputIndex(uint32_t index) {
-            return mModel.main.inputIndexes[index];
+            return mModel.main.outputIndexes[index];
         }
 
         // Index into the operand vector
@@ -66,17 +66,18 @@ class NnapiModelInfo {
 
         template <typename T>
         T GetConstOperand(uint32_t index) {
-            dumpOperand(index, model);
+            dumpOperand(index, mModel);
             uint32_t len;
             const uint8_t* buf = GetOperandMemory(index, len);
             return GetConstFromBuffer<T>(buf, len);
         }        
 
-        const std::vector<Operation>& getOperations() {
+        const std::vector<Operation> getOperations() {
+            ALOGD("%s", __func__);
             return mModel.main.operations;
         }
 
-        const Operand& getOperand(int index) {
+        const Operand getOperand(int index) {
             return mModel.main.operands[index];
         }
 
@@ -135,7 +136,7 @@ class NnapiModelInfo {
 
         template <typename T>
         std::vector<T> GetConstVecOperand(uint32_t index) {
-            dumpOperand(index, model);
+            dumpOperand(index, mModel);
             uint32_t len;
             const uint8_t* buf = GetOperandMemory(index, len);
             return GetConstVecFromBuffer<T>(buf, len);
@@ -155,13 +156,23 @@ class NnapiModelInfo {
         }
 
         bool setRunTimePoolInfosFromHidlMemories(const hidl_vec<V1_3::Request::MemoryPool>& pools);
-        
+
         bool updateRequestPoolInfos() {
             for (auto runtimeInfo : mRequestPoolInfos) {
-                return runtimeInfo.update();
+                runtimeInfo.update();
             }
 
             return true;
+        }
+
+        std::vector<V1_2::OutputShape> getOutputShapes() {
+            return mOutputShapes;
+        }
+
+        void unmapRuntimeMemPools() {
+            for (auto runtimeInfo : mRequestPoolInfos) {
+                runtimeInfo.unmap_mem();
+            }
         }
 
     private:
@@ -171,6 +182,7 @@ class NnapiModelInfo {
         std::vector<RunTimePoolInfo> mPoolInfos;
         std::vector<RunTimeOperandInfo> mOperands;
         std::vector<RunTimePoolInfo> mRequestPoolInfos;
+        std::vector<V1_2::OutputShape> mOutputShapes;
 };
 
 }
