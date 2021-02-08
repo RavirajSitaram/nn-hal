@@ -20,8 +20,7 @@ bool Add::validate(const Operation& op, NnapiModelInfo* modelInfo) {
         return false;
     }
 
-    if ((static_cast<int>(input0.type) == static_cast<int>(V1_0::OperandType::TENSOR_QUANT8_ASYMM)) ||
-        (input0.type == OperandType::TENSOR_QUANT8_ASYMM_SIGNED) ||
+    if ((input0.type == OperandType::TENSOR_QUANT8_ASYMM_SIGNED) ||
 		(static_cast<int>(input0.type) == static_cast<int>(V1_2::OperandType::TENSOR_QUANT16_ASYMM)) ||
         (static_cast<int>(input0.type) == static_cast<int>(V1_2::OperandType::TENSOR_QUANT16_SYMM))) {
         ALOGE("Unsupported data type format.. TENSOR_QUANT8_ASYMM Or TENSOR_QUANT8_ASYMM_SIGNED");
@@ -40,61 +39,11 @@ bool Add::validate(const Operation& op, NnapiModelInfo* modelInfo) {
     return true;
 }
 
-// std::shared_ptr<ngraph::Node> createOp(Operation& op, uint32_t index) {
-//         auto inputIndex = op.inputs[index];
-//         ngraph::Shape inShape;
-//         ALOGD("Input index: %d", inputIndex);
-// 		auto nnOperand = mModelInfo->getOperand(inputIndex);
-        
-//         switch(nnOperand.lifetime) {
-//             case OperandLifeTime::SUBGRAPH_INPUT: {
-//                 std::string name = "Add-"+ std::to_string(mNwCreator->getNumber());
-//                 ALOGD("Input is of type subgraph input %s  type=%d", name.c_str(), nnOperand.type);
-//                 auto in = std::make_shared<ngraph::opset3::Parameter>(ngraph::element::f32, toNgraphShape(nnOperand.dimensions));
-//                 in->set_friendly_name(name);
-
-//                 ALOGD("Setting graph input layer name: %s", name.c_str());
-//                 mNwCreator->addInputNode(inputIndex, in);
-
-//                 ALOGD("Adding layer metadata");
-//                 mNwCreator->addLayerMetadata(inputIndex, LayerInfo(name, false), true);
-
-//                 ALOGD("Done ...........");
-//                 return in;
-//             }
-//             case OperandLifeTime::CONSTANT_COPY:
-//             case OperandLifeTime::CONSTANT_REFERENCE: {
-//                 ALOGD("Input is of type : const copy / reference");
-//     			auto vals = mModelInfo->GetConstVecOperand<float>(inputIndex);
-//     			auto in = std::make_shared<ngraph::opset3::Constant>(ngraph::element::f32,
-//     															ngraph::Shape(toNgraphShape(nnOperand.dimensions)),
-//     															vals);
-//                 return in;
-//             }
-//             case OperandLifeTime::TEMPORARY_VARIABLE:
-//                 ALOGD("Input is of type temporary variable");
-//                 return nullptr;
-//             default:
-//                 ALOGE("Unsupported input !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-//                 return nullptr;
-//         }
-// }
-
 // Make it std::unique pointer..
 bool Add::createNode(const Operation& nnApiOp) {
     ALOGD("%s", __func__);
     
 	std::shared_ptr<ngraph::Node> inNode0 = nullptr,inNode1 = nullptr,activation = nullptr;
-
-    // auto isTemporaryVariable = [&](Operation op, uint32_t index) -> bool {
-    //     auto inputIndex = nnApiOp.inputs[index];
-    //     auto nnOperand = mModelInfo->getOperand(inputIndex);
-
-    //     if (nnOperand.lifetime == OperandLifeTime::TEMPORARY_VARIABLE)
-    //         return true;
-
-    //     return false;
-    // };
 
 	auto createNode = [&](Operation op, uint32_t index) -> std::shared_ptr<ngraph::Node> {
         auto inputIndex = op.inputs[index];
@@ -118,16 +67,21 @@ bool Add::createNode(const Operation& nnApiOp) {
                 return in;
         } else if ((nnOperand.lifetime == OperandLifeTime::CONSTANT_COPY) || (nnOperand.lifetime == OperandLifeTime::CONSTANT_REFERENCE)) {
                 ALOGD("Input is of type : const copy / reference %d", nnOperand.dimensions.size());
-    			auto vals = mModelInfo->GetConstVecOperand<float>(inputIndex);
+                std::vector<float> vals;
+                if (static_cast<int>(nnOperand.type) == static_cast<int>(OperandType::TENSOR_QUANT8_ASYMM)) {
+					vals = mModelInfo->GetConstVecOperand<float, uint8_t>(inputIndex);
+				} else {
+					vals = mModelInfo->GetConstVecOperand<float, float>(inputIndex);
+				}
 
                 for (auto val : vals) {
                     ALOGD("Dumping vals: %f", val);
                 }
 
                 //auto vals = std::vector<float>(1);
-    			auto in = std::make_shared<ngraph::opset3::Constant>(ngraph::element::f32,
-    															ngraph::Shape(toNgraphShape(nnOperand.dimensions)),
-    															vals);
+                auto in = std::make_shared<ngraph::opset3::Constant>(ngraph::element::f32,
+                                                                     ngraph::Shape(toNgraphShape(nnOperand.dimensions)),
+                                                                     vals);
                 return in;
         } else {
             ALOGD("Input is of type temporary variable or unsupported");
@@ -135,15 +89,16 @@ bool Add::createNode(const Operation& nnApiOp) {
         }
 	};
 
-    //if (!isTemporaryVariable(nnApiOp, 0)) {
-        ALOGD("========> Creating Node 0");
-        inNode0 = createNode(nnApiOp, 0);
-    //}
+    ALOGD("========> Creating Node 0");
+    inNode0 = createNode(nnApiOp, 0);
 
-    //if (!isTemporaryVariable(nnApiOp, 0)) {
-        ALOGD("========> Creating Node 1");
-        inNode1 = createNode(nnApiOp, 1);
-    //}
+    if (mModelInfo->getOperand(nnApiOp.inputs[0]).dimensions.size() > 2) {
+        RunTimeOperandInfo& runtimeOp = mModelInfo->getRuntimeOperand(nnApiOp.inputs[0]);
+		runtimeOp.ignoreLayout = true;
+    }
+
+    ALOGD("========> Creating Node 1");
+    inNode1 = createNode(nnApiOp, 1);
 
     auto getNode = [&](uint32_t index) {
         std::shared_ptr<ngraph::Node> node;
@@ -189,8 +144,7 @@ bool Add::createNode(const Operation& nnApiOp) {
     }
 
     auto outputName = activationFn?activation->outputs()[0].get_node()->get_friendly_name():addOp->outputs()[0].get_node()->get_friendly_name();
-    ALOGD("Output name: %s", outputName.c_str());
-
+    ALOGD("Output data type: %d", mModelInfo->getOperand(nnApiOp.outputs[0]).type);
     // Check if the output is output node or intermediate node in the graph
     switch(mModelInfo->getOperandLifetime(nnApiOp.outputs[0])) {
         case OperandLifeTime::TEMPORARY_VARIABLE:

@@ -5,6 +5,19 @@ namespace hardware {
 namespace neuralnetworks {
 namespace nnhal {
 
+template<typename T>
+bool deQuantize(const uint8_t* inputData, const uint32_t& len, const float scale,
+                const int32_t zeroPoint, float* outputData) {
+      int32_t value;
+      const T* inputBuf = reinterpret_cast<const T*>(inputData);
+      for (int i = 0; i < len; ++i) {
+        value = *(inputBuf + i);
+        outputData[i] = static_cast<float>(scale * (value - zeroPoint));
+        ALOGD("%s Converting value:%d to %f scale factor:%f zero point:%d", __func__, value, outputData[i], len, scale, zeroPoint);
+      }
+      return true;
+}
+
 bool NnapiModelInfo::initializeRunTimeOperandInfo() {
     // initialize runtime operand info from model.
     const size_t count = mModel.main.operands.size();
@@ -24,7 +37,6 @@ bool NnapiModelInfo::initializeRunTimeOperandInfo() {
             to.dimensions[j] = from.dimensions[j];
         }
 
-        to.scale = from.scale;
         switch (from.type) {
             case OperandType::TENSOR_FLOAT32:
             case OperandType::FLOAT32:
@@ -39,16 +51,22 @@ bool NnapiModelInfo::initializeRunTimeOperandInfo() {
                 to.type = from.type;
                 break;
             case OperandType::TENSOR_QUANT8_ASYMM:
-                ALOGE("OperandType::TENSOR_QUANT8_ASYMM is not supported");
+            case OperandType::TENSOR_QUANT8_SYMM:
+                to.type = from.type;
                 break;
             default:
                 ALOGE("wrong operand type %d", from.type);
                 return false;
         }
 
+        to.scale = from.scale;
         to.length = from.location.length;
         to.lifetime = from.lifetime;
         to.zeroPoint = from.zeroPoint;
+        to.ignoreLayout = false;
+
+        ALOGD("Operand index:%d zeroPoint=%d scaleFactor=%f", i, from.zeroPoint, from.scale);
+        ALOGD("Operand index:%d zeroPoint=%d scaleFactor=%f", i, to.zeroPoint, to.scale);
         
         switch (from.lifetime) {
             case OperandLifeTime::TEMPORARY_VARIABLE:
@@ -141,10 +159,24 @@ const uint8_t* NnapiModelInfo::GetOperandMemory(int index, uint32_t& lenOut) {
 }
 
 Blob::Ptr NnapiModelInfo::GetInOutOperandAsBlob(RunTimeOperandInfo& op, const uint8_t* buf,
-                                                uint32_t& len) {
-    if (op.type == OperandType::TENSOR_FLOAT32 || op.type == OperandType::FLOAT32) {
+                                                uint32_t& len,  bool ignoreLayout) {
+    bool isQuantInput = false;
+    if (op.type == OperandType::TENSOR_QUANT8_ASYMM_SIGNED ||
+            op.type == OperandType::TENSOR_QUANT8_ASYMM ||
+            op.type == OperandType::TENSOR_QUANT8_SYMM ||
+            op.type == OperandType::TENSOR_QUANT16_SYMM ) {
+        ALOGD("Is quantized input");
+        isQuantInput = true;
+    } else {
+        ALOGD("Is not quantized input.... %d", op.type);
+    }
+
+    if (op.type == OperandType::TENSOR_FLOAT32 || op.type == OperandType::FLOAT32 || isQuantInput) {
         if (op.lifetime == OperandLifeTime::SUBGRAPH_INPUT) {
-            VLOG(L1, "Create input blob !!!!");
+            VLOG(L1, "Create input blob !!!!   dimensions size=%d", op.dimensions.size());
+            if (buf == nullptr)
+                VLOG(L1, "SUBGRAPH_INPUT buf is NULL !!!!!!!!!!!!!!!");
+
             vec<unsigned int> order;
             InferenceEngine::Layout layout;
             if (op.dimensions.size() == 4) {
@@ -161,16 +193,38 @@ Blob::Ptr NnapiModelInfo::GetInOutOperandAsBlob(RunTimeOperandInfo& op, const ui
             auto inputDims = toDims(op.dimensions);
             InferenceEngine::TensorDesc td(InferenceEngine::Precision::FP32, permuteDims(inputDims, order), layout);
 
-            if (buf == nullptr) {
-                VLOG(L1, "MODEL_INPUT buf is NULL !!!!!!!!!!!!!!!");
-                InferenceEngine::TBlob<float>::Ptr blob =
-                    std::make_shared<InferenceEngine::TBlob<float>>(td);
-                blob->allocate();
-                return blob;
-            } else {
-                if (inputDims.size() != 4) {
-                    InferenceEngine::TBlob<float>::Ptr blob =
-                        std::make_shared<InferenceEngine::TBlob<float>>(td, (float*)buf);
+                if ( (ignoreLayout && (op.dimensions.size() == 4)) || (inputDims.size() != 4)) {
+                    ALOGD("Inside ");
+                    InferenceEngine::TBlob<float>::Ptr blob = nullptr;
+                    if (isQuantInput || (op.type == OperandType::TENSOR_INT32)) {
+                        blob = std::make_shared<InferenceEngine::TBlob<float>>(td);
+                        blob->allocate();
+
+                        switch(op.type) {
+                            case OperandType::TENSOR_QUANT8_ASYMM_SIGNED:
+                                deQuantize<int8_t>(buf, getNumberOfElements(op.dimensions), op.scale, op.zeroPoint, blob->buffer().as<float*>());
+                                break;
+                            case OperandType::TENSOR_QUANT8_ASYMM:
+                                ALOGE("asdasdasdasdasdasdasdasdasdas");
+                                deQuantize<uint8_t>(buf, getNumberOfElements(op.dimensions), op.scale, op.zeroPoint, blob->buffer().as<float*>());
+                                break;
+                            case OperandType::TENSOR_QUANT8_SYMM:
+                                deQuantize<int8_t>(buf, getNumberOfElements(op.dimensions), op.scale, 0, blob->buffer().as<float*>());
+                                break;
+                            case OperandType::TENSOR_QUANT16_SYMM:
+                                deQuantize<int16_t>(buf, getNumberOfElements(op.dimensions), op.scale, 0, blob->buffer().as<float*>());
+                                break;
+                            case OperandType::TENSOR_INT32:
+                                deQuantize<int32_t>(buf, getNumberOfElements(op.dimensions), op.scale, op.zeroPoint, blob->buffer().as<float*>());
+                                break;
+                            default:
+                                nnAssert(true);
+                                break;
+                        }
+                    } else {
+                        blob = std::make_shared<InferenceEngine::TBlob<float>>(td, (float *)buf, len);
+                        blob->allocate();
+                    }
                     return blob;
                 } else {
                     InferenceEngine::TBlob<float>::Ptr blob =
@@ -202,7 +256,6 @@ Blob::Ptr NnapiModelInfo::GetInOutOperandAsBlob(RunTimeOperandInfo& op, const ui
 
                     return blob;
                 }
-            }
         } else if (op.lifetime == OperandLifeTime::SUBGRAPH_OUTPUT) {
             VLOG(L1, "Create output blob !!!!");
             vec<unsigned int> order;
@@ -216,7 +269,7 @@ Blob::Ptr NnapiModelInfo::GetInOutOperandAsBlob(RunTimeOperandInfo& op, const ui
             } else if (op.dimensions.size() == 3) {
                 // order = {0, 1, 2, 3};  // nhwc -> nchw
                 layout = InferenceEngine::Layout::CHW;
-                ALOGI("Anoob : GetInOutOperandAsBlob output already transposed to NHWC");
+                ALOGI("GetInOutOperandAsBlob output already transposed to NHWC");
             } else {
                 // order = {0}; //(op.dimensions.size() < 2)
                 layout = InferenceEngine::Layout::C;
@@ -251,6 +304,12 @@ IRBlob::Ptr NnapiModelInfo::GetConstOperandAsTensor(int operand_idx, int operati
     dumpOperand(operand_idx, mModel);
     const auto op = mModel.main.operands[operand_idx];
     uint32_t len;
+    bool isQuantInput = false;
+    if (op.type == OperandType::TENSOR_QUANT8_ASYMM_SIGNED ||
+            op.type == OperandType::TENSOR_QUANT8_SYMM ||
+            op.type == OperandType::TENSOR_QUANT16_SYMM ) {
+        isQuantInput = true;
+    }
 
     const uint8_t* buf = GetOperandMemory(operand_idx, len);
     VLOG(L1, "NnapiModelInfo:: operand_index: %d, operation_index :%d,len: %d, buf: %p",
@@ -279,8 +338,32 @@ IRBlob::Ptr NnapiModelInfo::GetConstOperandAsTensor(int operand_idx, int operati
             return blob;
         } else {
             if (inputDims.size() != 4) {
-                InferenceEngine::TBlob<float>::Ptr blob =
-                    std::make_shared<InferenceEngine::TBlob<float>>(td, (float*)buf, len);
+                InferenceEngine::TBlob<float>::Ptr blob = nullptr;
+                if (isQuantInput) {
+                    blob = std::make_shared<InferenceEngine::TBlob<float>>(td);
+                    blob->allocate();
+
+                    switch(op.type) {
+                        case OperandType::TENSOR_QUANT8_ASYMM_SIGNED:
+                            deQuantize<int8_t>(buf, getNumberOfElements(op.dimensions), op.scale, op.zeroPoint, blob->buffer().as<float*>());
+                            break;
+                        case OperandType::TENSOR_QUANT8_SYMM:
+                            deQuantize<int8_t>(buf, getNumberOfElements(op.dimensions), op.scale, 0, blob->buffer().as<float*>());
+                            break;
+                        case OperandType::TENSOR_QUANT16_SYMM:
+                            deQuantize<int16_t>(buf, getNumberOfElements(op.dimensions), op.scale, 0, blob->buffer().as<float*>());
+                            break;
+                        case OperandType::TENSOR_INT32:
+                            deQuantize<int32_t>(buf, getNumberOfElements(op.dimensions), op.scale, 0, blob->buffer().as<float*>());
+                            break;
+                        default:
+                            nnAssert(true);
+                            break;
+                    }
+                } else {
+                    blob = std::make_shared<InferenceEngine::TBlob<float>>(td, (float *)buf, len);
+                    blob->allocate();
+                }
                 return blob;
             } else {
                 InferenceEngine::TBlob<float>::Ptr blob =
@@ -336,11 +419,19 @@ IRBlob::Ptr NnapiModelInfo::GetConstOperandAsTensor(int operand_idx, int operati
 // Redundant.. Remove the code
 IRBlob::Ptr NnapiModelInfo::GetConstWeightsOperandAsTensor(uint32_t index) {
     dumpOperand(index, mModel);
+
     const auto op = mModel.main.operands[index];
+    bool isQuantInput = false;
+    if (op.type == OperandType::TENSOR_QUANT8_ASYMM_SIGNED ||
+            op.type == OperandType::TENSOR_QUANT8_SYMM ||
+            op.type == OperandType::TENSOR_QUANT16_SYMM ) {
+        isQuantInput = true;
+    }
+
     uint32_t len;
     const uint8_t* buf = GetOperandMemory(index, len);
     VLOG(L1, "NnapiModelInfo:: Operand: index: %d, len: %d, buf: %p", index, len, buf);
-    if (op.type == OperandType::TENSOR_FLOAT32 || op.type == OperandType::FLOAT32) {
+    if (op.type == OperandType::TENSOR_FLOAT32 || op.type == OperandType::FLOAT32 || isQuantInput) {
         vec<unsigned int> order;
         InferenceEngine::Layout layout;
         if (op.dimensions.size() == 4) {
@@ -364,8 +455,31 @@ IRBlob::Ptr NnapiModelInfo::GetConstWeightsOperandAsTensor(uint32_t index) {
             return blob;
         } else {
             if (inputDims.size() != 4) {
-                InferenceEngine::TBlob<float>::Ptr blob =
-                    std::make_shared<InferenceEngine::TBlob<float>>(td, (float*)buf, len);
+                InferenceEngine::TBlob<float>::Ptr blob = nullptr;
+                if (isQuantInput) {
+                    blob = std::make_shared<InferenceEngine::TBlob<float>>(td);
+                    blob->allocate();
+
+                    switch(static_cast<int>(op.type)) {
+                        case static_cast<int>(OperandType::TENSOR_QUANT8_ASYMM_SIGNED):
+                            deQuantize<int8_t>(buf, getNumberOfElements(op.dimensions), op.scale, op.zeroPoint, blob->buffer().as<float*>());
+                            break;
+                        case static_cast<int>(V1_2::OperandType::TENSOR_QUANT8_SYMM):
+                            deQuantize<int8_t>(buf, getNumberOfElements(op.dimensions), op.scale, 0, blob->buffer().as<float*>());
+                            break;
+                        case static_cast<int>(V1_2::OperandType::TENSOR_QUANT16_SYMM):
+                            deQuantize<int16_t>(buf, getNumberOfElements(op.dimensions), op.scale, 0, blob->buffer().as<float*>()); // Ugly hack reverting
+                            break;
+                        default:
+                            ALOGE("Failed dequantize for type: %d", op.type);
+                            break;
+                    }
+                }
+                else {
+                    InferenceEngine::TBlob<float>::Ptr blob = std::make_shared<InferenceEngine::TBlob<float>>(td, (float *)buf, len);
+                    blob->allocate();
+                }
+
                 return blob;
             } else {
                 InferenceEngine::TBlob<float>::Ptr blob =
@@ -452,10 +566,13 @@ Blob::Ptr NnapiModelInfo::getBlobFromMemoryPoolIn(const V1_3::Request& request, 
 
     operand.buffer = r.buffer + arg.location.offset;
     operand.length = arg.location.length;
-    ALOGI("%s Operand length:%d pointer:%p offset:%d pool index: %d", __func__, operand.length, (r.buffer + arg.location.offset), arg.location.offset, poolIndex);
+    ALOGI("%s Operand length:%d pointer:%p offset:%d pool index: %d ignore layout=%d", __func__,
+            operand.length, (r.buffer + arg.location.offset), arg.location.offset, poolIndex, operand.ignoreLayout);
+
     return GetInOutOperandAsBlob(operand,
                                 const_cast<uint8_t*>(r.buffer + arg.location.offset),
-                                operand.length);
+                                operand.length,
+                                operand.ignoreLayout);
 }
 
 void* NnapiModelInfo::getBlobFromMemoryPoolOut(const V1_3::Request& request, uint32_t index) {

@@ -145,9 +145,6 @@ class BasePreparedModel : public V1_3::IPreparedModel{
         
 protected:
         void deinitialize();
-        //bool initializeRunTimeOperandInfo();
-        //void initializeInput();
-        //bool finalizeOutput();
 
         IntelDeviceType mTargetDevice;
         std::shared_ptr<NnapiModelInfo> mModelInfo;

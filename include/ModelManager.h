@@ -4,6 +4,7 @@
 #include <hidlmemory/mapping.h>
 #include <android/hidl/memory/1.0/IMemory.h>
 #include <ie_blob.h>
+#include <type_traits>
 
 #include "Driver.h"
 #include "Utils.h"
@@ -77,12 +78,12 @@ class NnapiModelInfo {
             return mModel.main.operations;
         }
 
-        const Operand getOperand(int index) {
+        V1_3::Operand getOperand(uint32_t index) {
             return mModel.main.operands[index];
         }
 
         RunTimeOperandInfo& getRuntimeOperand(uint32_t index) {
-            return mOperands[mModel.main.inputIndexes[index]];
+            return mOperands[index];
         }
 
         bool isConstOperand(int index) {
@@ -100,7 +101,7 @@ class NnapiModelInfo {
         const uint8_t* GetOperandMemory(int index, uint32_t& lenOut);
         IRBlob::Ptr GetConstOperandAsTensor(int operand_idx, int operation_idx);
         Blob::Ptr GetInOutOperandAsBlob(RunTimeOperandInfo& op, const uint8_t* buf,
-                                                  uint32_t& len);
+                                        uint32_t& len, bool ignoreLayout = false);
         IRBlob::Ptr GetConstWeightsOperandAsTensor(uint32_t index); // Redundant
 
         template <typename T>
@@ -118,28 +119,40 @@ class NnapiModelInfo {
         }
 
         // TODO: Move it to Utils class
-        template <typename T>
-        std::vector<T> GetConstVecFromBuffer(const uint8_t* buf, uint32_t len) {
-            int n = len / sizeof(T);
-            if (n * sizeof(T) != len) {
-                VLOG(L1, "typeid(T).name() should be  multiples of %d bytes", sizeof(T));
+        template <typename OutputType, typename InputType>
+        std::vector<OutputType> GetConstVecFromBuffer(const uint8_t* buf, uint32_t len) {
+            int n = len / sizeof(OutputType);
+            if (n * sizeof(OutputType) != len) {
+                VLOG(L1, "typeid(T).name() should be  multiples of %d bytes", sizeof(OutputType));
                 nnAssert(false);
             }
 
-            std::vector<T> ret;
+            std::vector<OutputType> ret;
             for (int i = 0; i < n; i++) {
-                ret.push_back(*(T*)buf);
-                buf += sizeof(T);
+                ret.push_back(*(OutputType*)buf);
+                buf += sizeof(OutputType);
             }
             return ret;
-        }   
+        }
 
-        template <typename T>
-        std::vector<T> GetConstVecOperand(uint32_t index) {
+        template <typename OutputType, typename InputType>
+        std::vector<OutputType> GetConstVecOperand(uint32_t index) {
             dumpOperand(index, mModel);
             uint32_t len;
             const uint8_t* buf = GetOperandMemory(index, len);
-            return GetConstVecFromBuffer<T>(buf, len);
+
+            if (std::is_same<InputType, uint8_t>::value) {
+                const auto op = mModel.main.operands[index];
+                std::vector<OutputType> ret;
+                for (int i = 0; i < len; i++) {
+                    OutputType val = ((*buf - op.zeroPoint) * op.scale);
+                    ALOGD("%s Original value = %d Converted value = %f", __func__, *buf, val);
+                    ret.push_back(val);
+                    buf++;
+                }
+                return ret;
+            } else
+                return GetConstVecFromBuffer<OutputType, InputType>(buf, len);
         }
 
         template <typename T>
@@ -173,6 +186,10 @@ class NnapiModelInfo {
             for (auto runtimeInfo : mRequestPoolInfos) {
                 runtimeInfo.unmap_mem();
             }
+        }
+
+        OperandType getOperandType(uint32_t index) {
+            return mOperands[index].type;
         }
 
     private:

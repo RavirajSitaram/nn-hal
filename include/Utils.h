@@ -265,6 +265,8 @@ struct RunTimeOperandInfo {
     uint32_t length;
     OperandLifeTime lifetime;
     uint32_t numberOfUsesLeft;
+    bool ignoreLayout;
+
     Shape shape() const {
         return {
                 .type = type,
@@ -379,6 +381,29 @@ T getOperandConstVal(const Model& model, const Operand& operand) {
 void writeBufferToFile(std::string filename,
                         const float* buf,
                         size_t length);
+
+template <typename InputType, typename OutputType>
+bool convertToFloat(const InputType* inputData, const Shape& inputShape, OutputType* outputData) {
+
+    auto getNumberOfElements = [](const std::vector<uint32_t>& dims) {
+        if (dims.size() == 0) {
+            return 0;
+        }
+        return std::accumulate(dims.begin(), dims.end(), 1, std::multiplies<>());
+      };
+
+      const int numElements = getNumberOfElements(inputShape.dimensions);
+      const int32_t zeroPoint = inputShape.offset;
+      const float scale = inputShape.scale;
+      ALOGD("%s Number of elements: %d", __func__, numElements);
+      for (int i = 0; i < numElements; ++i) {
+          const int32_t value = inputData[i];
+          outputData[i] = static_cast<OutputType>(scale * (value - zeroPoint));
+
+          ALOGD("Converting value:%d to %f scale factor:%f zero point:%d", value, outputData[i], scale, zeroPoint);
+      }   
+      return true;
+}
 
 }  // namespace nnhal
 }  // namespace neuralnetworks

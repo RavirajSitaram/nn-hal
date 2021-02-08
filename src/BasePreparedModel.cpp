@@ -91,6 +91,42 @@ void notify(const sp<V1_3::IExecutionCallback>& callback, const ErrorStatus& sta
     }
 }
 
+static
+bool quantizeToQuant8Signed(const float* inputData, int8_t* outputData, const Shape& outputShape) {
+    uint32_t size = getNumberOfElements(outputShape.dimensions);
+    for (uint32_t i = 0; i < size; ++i) {
+        outputData[i] = static_cast<int8_t>(std::max<float>(
+                -128.0f,
+                std::min<float>(127.0f, outputShape.offset +
+                                std::round(inputData[i] / outputShape.scale))));
+        ALOGD("%s input: %f output: %d", __func__, inputData[i], outputData[i]);
+    }
+    return true;
+}
+
+static
+bool quantizeToQuant8(const float* inputData, uint8_t* outputData, const Shape& outputShape) {
+      uint32_t size = getNumberOfElements(outputShape.dimensions);
+      for (uint32_t i = 0; i < size; ++i) {
+          outputData[i] = static_cast<uint8_t>(std::max<float>(
+                  0.0f, std::min<float>(255.0f, outputShape.offset + std::round(inputData[i] /
+                                                                                outputShape.scale))));
+        ALOGD("%s input: %f output: %d scale: %d offset:%d", __func__, inputData[i], outputData[i],
+                                                                        outputShape.scale, outputShape.offset);
+      }
+      return true;
+}
+
+static
+bool quantizeToQuant16(const float* inputData, uint16_t* outputData, const Shape& outputShape) {
+    uint32_t size = getNumberOfElements(outputShape.dimensions);
+    for (uint32_t i = 0; i < size; ++i) {
+        outputData[i] = static_cast<uint16_t>(outputShape.offset + (std::round(inputData[i] / outputShape.scale)));
+        ALOGD("%s input: %f output: %d", __func__, inputData[i], outputData[i]);
+    }      
+    return true;
+}
+
 // Move out all the code from ModelInfo regarding runtime pool info
 // We need to make this function re-entrant
 template <typename T_IExecutionCallback>
@@ -172,7 +208,24 @@ void asyncExecute(const V1_3::Request& request, V1_2::MeasureTiming measure,
             auto layerData = outLayerMap[outIndex];
             ALOGD("Found output index: %d layername : %s", outIndex, layerData.layerName.c_str());
             auto srcBlob = plugin->getInferRequest().GetBlob(layerData.layerName);
-            std::memcpy((uint8_t*)destPtr, srcBlob->buffer().as<uint8_t*>(), srcBlob->byteSize());
+            auto operandType = modelInfo->getOperandType(outIndex);
+            auto operand = modelInfo->getRuntimeOperand(outIndex);
+            ALOGD("operandtype: %d", operandType);
+
+            switch(static_cast<int>(operandType)) {
+                case static_cast<int>(OperandType::TENSOR_QUANT8_ASYMM):
+                    ALOGD("FLOAT32~~~~~~~~~~~~~~~~~~~~~~~~~~ TENSOR_QUANT8_SYMM");
+                    quantizeToQuant8(srcBlob->buffer().as<float*>(), (uint8_t*)destPtr, operand.shape());
+                    break;
+                case static_cast<int>(OperandType::TENSOR_FLOAT32):
+                    ALOGD("FLOAT32~~~~~~~~~~~~~~~~~~~~~~~~~~ bytesize=%d", srcBlob->byteSize());
+                    std::memcpy((uint8_t*)destPtr, srcBlob->buffer().as<uint8_t*>(), srcBlob->byteSize());
+                    break;
+                default:
+                    ALOGD("FLOAT32~~~~~~~~~~~~~~~~~~~~~~~~~~ default");
+                    nnAssert(true);
+                    break;
+            }
             writeBufferToFile(layerData.layerName, srcBlob->buffer().as<float*>(), srcBlob->size());
 
             float* a = static_cast<float*>(destPtr);
@@ -252,6 +305,12 @@ bool BasePreparedModel::initialize() {
 
     ALOGI("Generating IR Graph");
     mNet = mNgraphCreator->generateIRGraph();
+    if (!mNet) {
+        ALOGE("Failed to convert to CNNNetwork");
+        nnAssert(true);
+    }
+
+    //mNet->serialize("/tmp/graph.xml", "/tmp.graph.bin");
     
     switch (mTargetDevice)
     {
@@ -397,10 +456,26 @@ executeSynchronouslyBase(const V1_3::Request& request, V1_2::MeasureTiming measu
             auto layerData = outLayerMap[outIndex];
             ALOGD("Found output index: %d layername : %s", outIndex, layerData.layerName.c_str());
             auto srcBlob = plugin->getInferRequest().GetBlob(layerData.layerName);
-            std::memcpy((uint8_t*)destPtr, srcBlob->buffer().as<uint8_t*>(), srcBlob->byteSize());
+            auto operandType = modelInfo->getOperandType(outIndex);
+            auto operand = modelInfo->getRuntimeOperand(outIndex);
+            ALOGD("operandtype: %d", operandType);
+
+            switch(static_cast<int>(operandType)) {
+                case static_cast<int>(OperandType::TENSOR_QUANT8_ASYMM):
+                    ALOGD("O/P Quantizing FLOAT to TENSOR_QUANT8_SYMM");
+                    quantizeToQuant8(srcBlob->buffer().as<float*>(), (uint8_t*)destPtr, operand.shape());
+                    break;
+                case static_cast<int>(OperandType::TENSOR_FLOAT32):
+                    ALOGD("O/P copied to destination");
+                    std::memcpy((uint8_t*)destPtr, srcBlob->buffer().as<uint8_t*>(), srcBlob->byteSize());
+                    break;
+                default:
+                    ALOGE("O/P no known conversion to float");
+                    nnAssert(true);
+                    break;
+            }
             writeBufferToFile(layerData.layerName, srcBlob->buffer().as<float*>(), srcBlob->size());
-            
-            
+
             float* a = static_cast<float*>(destPtr);
             ALOGD("########### -- %f", *a);
         } else {

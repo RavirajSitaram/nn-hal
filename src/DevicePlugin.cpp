@@ -75,7 +75,7 @@ InferenceEngine::TBlob<float>::Ptr DevicePlugin<T>::getBlob(const std::string& o
     InferenceEngine::Blob::Ptr outputBlob;
     outputBlob = mInferRequest.GetBlob(outName);
     return android::hardware::neuralnetworks::nnhal::As<InferenceEngine::TBlob<float>>(outputBlob);
-    }
+}
 
 template<IntelDeviceType T>
 void DevicePlugin<T>::infer() {
