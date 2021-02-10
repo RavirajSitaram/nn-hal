@@ -14,6 +14,8 @@
 #include <log/log.h>
 #include <fstream>
 #include <thread>
+#include <cpuid.h>
+
 #include "ValidateHal.h"
 #include "IRBuilder.h"
 #include "Driver.h"
@@ -346,6 +348,21 @@ struct printHelper<float> {
 void writeBufferToFile(std::string filename,
                         const float* buf,
                         size_t length);
+
+inline void native_cpuid(unsigned int *eax, unsigned int *ebx,
+                         unsigned int *ecx, unsigned int *edx) {
+    size_t level = *eax;
+#if defined(_WIN32) || defined(WIN32)
+    int regs[4] = {static_cast<int>(*eax), static_cast<int>(*ebx), static_cast<int>(*ecx), static_cast<int>(*edx)};
+    __cpuid(regs, level);
+    *eax = static_cast<uint32_t>(regs[0]);
+    *ebx = static_cast<uint32_t>(regs[1]);
+    *ecx = static_cast<uint32_t>(regs[2]);
+    *edx = static_cast<uint32_t>(regs[3]);
+#else
+    __get_cpuid(level, eax, ebx, ecx, edx);
+#endif
+}
 
 typedef struct _metrics{
     double deQuant_time;
