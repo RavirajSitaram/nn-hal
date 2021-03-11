@@ -31,18 +31,23 @@ class GnaPreparedModel : public PreparedModel {
     struct LayerInfo {
         std::string layerName;
         bool memoryLayer;
+        bool cpuLayer;
 
-        LayerInfo(std::string layer, bool memory):layerName(layer),memoryLayer(memory){}
+        LayerInfo(std::string layer, bool memory):layerName(layer),memoryLayer(memory), cpuLayer(false){}
+        LayerInfo(std::string layer, bool memory, bool cpu):layerName(layer),memoryLayer(memory), cpuLayer(cpu){}
     };
 
     std::map<uint32_t, LayerInfo> mInputPorts;
-    std::map<uint32_t, std::string> mOutputToLayerMap;
+    std::map<uint32_t, LayerInfo> mOutputToLayerMap;
     std::vector<uint32_t> mlayerInputIndices; /* to be filled during the infer call. Need to optimize */
+    std::vector<uint32_t> mlayerIntermediateIndices;
     std::vector<uint32_t> mModelInputIndices;
     std::vector<uint32_t> mModelOutputIndices;
 
     IRBuilder::ModelBuilder* mBuilderModel;
     GnaNetwork* gnaPluginPtr;
+
+    std::vector<OpContainer*> mNwManager;
 
     bool isDecoderNw, isEnc0Nw, isEnc1Nw;
     std::string modelNameStr;
@@ -98,6 +103,7 @@ public:
 
     bool operationLSTM(const Operation& operation);
     bool operationQuantizedLSTM(const Operation& operation);
+    BaseOp* operationDequantize(const Operation& operation);
 
 protected:
     void deinitialize();
@@ -106,7 +112,19 @@ protected:
 
     void asyncExecute(const V1_0_Request& request, MeasureTiming measure, time_point driverStart,
                       const sp<V1_0::IExecutionCallback>& callback);
+    
+    bool constructGNAGraph(std::pair<int, int> indices);
+    OpContainer* constructCpuGraph(std::pair<int, int> indices);
+    BaseOp* getCpuOpFromLayerName(std::string layer);
 
+    bool updateMemoryAfterCPUGraphExecution(const V1_0_Request& request);
+    bool updateMemoryAfterGNAGraphExecution(const V1_0_Request& request);
+
+    std::vector<RunTimePoolInfo> mRuntimeRequestPoolInfos;
+
+    Blob::Ptr getBlobFromMemoryPool(uint32_t index, const V1_0_Request& request);
+    RunTimeOperandInfo& getOperandFromMemoryPool(uint32_t index, const V1_0_Request& request);
+    void executeGnaGraph();
 };
 
 }  // namespace nnhal
