@@ -187,8 +187,8 @@ class BaseOp {
     public:
         virtual bool isCpuOp() = 0;
         
-        virtual float* run() {
-            return nullptr;
+        virtual bool run() {
+            return false;
         };
 
         virtual std::string getLayerName() { return "";}
@@ -199,7 +199,7 @@ class BaseOp {
             return false;
         }
 
-        virtual std::tuple<float*, int32_t> getOutputData() {
+        virtual std::tuple<void*, int32_t> getOutputData() {
             return std::make_pair(nullptr, 0);
         }
 };
@@ -217,13 +217,13 @@ class OpContainer {
             opsVec.push_back(op);
         }
 
-        float* run() {
+        bool run() {
             VLOG(L1, "%s", __func__);
             for (auto op: opsVec) {
-                output = op->run();
+                op->run(); // TODO: FIX
             }
 
-            return output;
+            return true;
         }
 
         BaseOp* getCpuOpFromLayerName(std::string layer) {

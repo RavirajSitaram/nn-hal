@@ -9,7 +9,8 @@
 #include <time.h>
 #include <chrono>
 #include <xmmintrin.h>
-#include "CpuOps.h"
+#include "Dequantize.h"
+#include "Quantize.h"
 
 using namespace std::chrono;
 
@@ -985,7 +986,8 @@ bool GnaPreparedModel::updateMemoryAfterCPUGraphExecution(const V1_0_Request& re
                 // Blob::Ptr outputBlob = gnaPluginPtr->getInferRequest().GetBlob(layerName);
                 // float* srcPtr = outputBlob->buffer().as<float*>();
                 VLOG(L1, "Got layer:%s from cpu layers for index:%d", layerName.c_str(), index);
-                auto[srcPtr, outputLen] = layerPtr->getOutputData();
+                auto[srcPtrVoid, outputLen] = layerPtr->getOutputData();
+                float* srcPtr = static_cast<float*>(srcPtrVoid);
 
                 VLOG(L1, "Copying output.. Output len:%d", outputLen);
                 for(auto i =0; i < 4; i++)
@@ -1753,6 +1755,48 @@ BaseOp* GnaPreparedModel::operationDequantize(const Operation& operation) {
     mOutputToLayerMap.emplace(std::make_pair(operation.outputs[0],
                                             LayerInfo(name, false, true)));
     return dequantOp;
+}
+
+BaseOp* GnaPreparedModel::operationQuantize(const Operation& operation) {
+    static int count = 0;
+    std::string name = "quantize-cpu-" + std::to_string(count++);
+
+    auto operandDetails = mModel.main.operands[operation.inputs[0]];
+    if ( (static_cast<int>(operandDetails.lifetime) == static_cast<int>(OperandLifeTime::CONSTANT_COPY)) ||
+         (static_cast<int>(operandDetails.lifetime) == static_cast<int>(OperandLifeTime::CONSTANT_REFERENCE))) {
+       VLOG(L1, "Quantize Op input is of type const !!!!! Revaluate NW");
+        nnAssert(false);
+    }
+
+    auto OutOperandDetails = mModel.main.operands[operation.outputs[0]];
+    BaseOp* quantOp = nullptr;
+    float   scaleFactor = operandDetails.scale;
+    int32_t zp = operandDetails.zeroPoint;
+
+    switch(OutOperandDetails.type) {
+        case OperandType::TENSOR_QUANT8_ASYMM:
+            VLOG(L1, "Quantize op for TENSOR_QUANT8_ASYMM");
+            quantOp = new QuantizeOp<int8_t, uint8_t>(name, scaleFactor, zp);
+            break;
+        case OperandType::TENSOR_QUANT8_ASYMM_SIGNED:
+            VLOG(L1, "Quantize op for TENSOR_QUANT8_ASYMM_SIGNED");
+            quantOp = new QuantizeOp<int8_t, int8_t>(name, scaleFactor, zp);
+            break;
+        default:
+            VLOG(L1, "Unsupported tensor type");
+            nnAssert(false);
+            break;
+    }
+
+    //if (static_cast<int>(operandDetails.lifetime) == static_cast<int>(OperandLifeTime::SUBGRAPH_INPUT)) {
+        mInputPorts.emplace(std::make_pair(operation.inputs[0],
+                                            LayerInfo(name, false, true)));
+    //}
+
+    //mOutputToLayerMap[operation.outputs[0]] = name;
+    mOutputToLayerMap.emplace(std::make_pair(operation.outputs[0],
+                                            LayerInfo(name, false, true)));
+    return quantOp;
 }
 
 IRBlob::Ptr GnaPreparedModel::GetConstWeightsOperandAsTensor(uint32_t index)

@@ -104,6 +104,7 @@ public:
     bool operationLSTM(const Operation& operation);
     bool operationQuantizedLSTM(const Operation& operation);
     BaseOp* operationDequantize(const Operation& operation);
+    BaseOp* operationQuantize(const Operation& operation);
 
 protected:
     void deinitialize();
